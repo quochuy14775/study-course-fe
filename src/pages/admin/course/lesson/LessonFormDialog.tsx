@@ -1,7 +1,7 @@
 import React, {useEffect, useState, useRef} from 'react';
 import {Lesson, LessonRequest} from '../../../../types/lesson';
 import {v4 as uuidv4} from 'uuid';
-import {GripVertical, Trash2, Plus, ChevronUp, ChevronDown, Image as ImageIcon, Clock, X} from 'lucide-react';
+import {GripVertical, Trash2, Plus, Image as ImageIcon, Clock, X} from 'lucide-react';
 import {createPortal} from 'react-dom';
 import {
     closestCenter,

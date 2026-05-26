@@ -114,9 +114,6 @@ const ArticlesPage: React.FC = () => {
   const baseCard = 'bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-xl transition-all duration-300 transform hover:-translate-y-1 hover:shadow-[0_20px_60px_rgba(0,0,0,0.08)] hover:border-slate-300 overflow-hidden';
   const featuredEnhance = 'bg-gradient-to-br from-white to-slate-50 shadow-lg scale-[1.01]';
 
-  // helper to compute stagger class
-  const staggerClass = (idx: number) =>
-    `${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} transition-all duration-500 delay-[${idx * 80}ms]`;
 
   return (
     <main className="min-h-screen bg-ink-50 relative">

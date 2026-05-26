@@ -1,4 +1,4 @@
-import {CheckCircle, Flame, Leaf, List, TrendingUp, XCircle} from "lucide-react";
+import {CheckCircle, Flame, Leaf, TrendingUp, XCircle} from "lucide-react";
 
 export const LevelOptions = [
     {value: '0', label: 'Beginner', icon: Leaf, iconClass: 'text-green-500'},

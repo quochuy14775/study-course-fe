@@ -264,7 +264,7 @@ const LessonManagement: React.FC = () => {
                             <InfoRow label="Trạng thái" value={course?.isActive ? 'Hoạt động' : 'Tạm ẩn'} />
                         </div>
                         <p className="text-xs text-ink-400 mt-6 font-mono">
-                            // TODO: Chuyển sang form chỉnh sửa inline
+                            {/* TODO: Chuyển sang form chỉnh sửa inline */}
                         </p>
                     </div>
                 )}
