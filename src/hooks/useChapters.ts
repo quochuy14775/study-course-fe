@@ -11,6 +11,11 @@ interface ChaptersData {
     chapters: Chapter[];
 }
 
+export interface LessonRef {
+    id: number;
+    chapterId?: number | null;
+}
+
 const STORAGE_KEY = (courseId: number | string) => `eduhub:course:${courseId}:chapters`;
 
 const UNCATEGORIZED_ID = 'uncategorized';
@@ -21,10 +26,9 @@ const createDefaultData = (): ChaptersData => ({
     ],
 });
 
-export function useChapters(courseId: number | string | undefined, allLessonIds: number[]) {
+export function useChapters(courseId: number | string | undefined, allLessons: LessonRef[]) {
     const [data, setData] = useState<ChaptersData>(createDefaultData);
 
-    // Load from localStorage on mount / courseId change
     useEffect(() => {
         if (!courseId) return;
         try {
@@ -40,7 +44,6 @@ export function useChapters(courseId: number | string | undefined, allLessonIds:
         setData(createDefaultData());
     }, [courseId]);
 
-    // Persist on change
     useEffect(() => {
         if (!courseId) return;
         try {
@@ -48,35 +51,61 @@ export function useChapters(courseId: number | string | undefined, allLessonIds:
         } catch {}
     }, [data, courseId]);
 
-    // Reconcile: ensure every lesson lives in exactly one chapter (default: uncategorized)
+    // Reconcile: ensure every lesson lives in exactly one chapter.
+    // Missing lessons are grouped by their BE chapterId — each unique BE chapter
+    // gets its own FE chapter (id = "ch_be_{beChapterId}"). Lessons with no
+    // chapterId fall back to uncategorized.
     useEffect(() => {
         setData((prev) => {
+            const allIds = allLessons.map((l) => l.id);
             const seen = new Set<number>();
+
             const cleaned = prev.chapters.map((c) => ({
                 ...c,
                 lessonIds: c.lessonIds.filter((id) => {
-                    if (!allLessonIds.includes(id) || seen.has(id)) return false;
+                    if (!allIds.includes(id) || seen.has(id)) return false;
                     seen.add(id);
                     return true;
                 }),
             }));
-            const missing = allLessonIds.filter((id) => !seen.has(id));
+
+            const missing = allLessons.filter((l) => !seen.has(l.id));
+
             if (missing.length === 0 && JSON.stringify(cleaned) === JSON.stringify(prev.chapters)) {
                 return prev;
             }
-            // Ensure uncategorized exists
+
             let chapters = cleaned;
             if (!chapters.find((c) => c.id === UNCATEGORIZED_ID)) {
                 chapters = [{ id: UNCATEGORIZED_ID, title: 'Chưa phân loại', lessonIds: [] }, ...chapters];
             }
-            if (missing.length) {
-                chapters = chapters.map((c) =>
-                    c.id === UNCATEGORIZED_ID ? { ...c, lessonIds: [...c.lessonIds, ...missing] } : c,
-                );
+
+            if (missing.length > 0) {
+                // Group by BE chapterId
+                const grouped: Record<string, number[]> = {};
+                for (const l of missing) {
+                    const key = l.chapterId ? `ch_be_${l.chapterId}` : UNCATEGORIZED_ID;
+                    if (!grouped[key]) grouped[key] = [];
+                    grouped[key].push(l.id);
+                }
+
+                for (const feKey of Object.keys(grouped)) {
+                    const ids = grouped[feKey];
+                    const existing = chapters.find((c) => c.id === feKey);
+                    if (existing) {
+                        chapters = chapters.map((c) =>
+                            c.id === feKey ? { ...c, lessonIds: [...c.lessonIds, ...ids] } : c,
+                        );
+                    } else {
+                        const n = chapters.filter((c) => c.id !== UNCATEGORIZED_ID).length + 1;
+                        chapters = [...chapters, { id: feKey, title: `Chương ${n}`, lessonIds: ids }];
+                    }
+                }
             }
+
             return { chapters };
         });
-    }, [allLessonIds]);
+    }, [allLessons]);
 
     const addChapter = useCallback((title: string) => {
         const id = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -95,7 +124,6 @@ export function useChapters(courseId: number | string | undefined, allLessonIds:
         setData((prev) => {
             const target = prev.chapters.find((c) => c.id === id);
             if (!target) return prev;
-            // Move its lessons to uncategorized
             const remaining = prev.chapters.filter((c) => c.id !== id);
             return {
                 chapters: remaining.map((c) =>
@@ -145,6 +173,19 @@ export function useChapters(courseId: number | string | undefined, allLessonIds:
         }));
     }, []);
 
+    const moveLessonToChapterAtIndex = useCallback((lessonId: number, targetChapterId: string, targetIndex: number) => {
+        setData((prev) => ({
+            chapters: prev.chapters.map((c) => {
+                if (c.id === targetChapterId) {
+                    const filtered = c.lessonIds.filter((id) => id !== lessonId);
+                    filtered.splice(targetIndex, 0, lessonId);
+                    return { ...c, lessonIds: filtered };
+                }
+                return { ...c, lessonIds: c.lessonIds.filter((id) => id !== lessonId) };
+            }),
+        }));
+    }, []);
+
     return {
         chapters: data.chapters,
         addChapter,
@@ -154,6 +195,7 @@ export function useChapters(courseId: number | string | undefined, allLessonIds:
         reorderChapters,
         reorderLessonsInChapter,
         moveLessonToChapter,
+        moveLessonToChapterAtIndex,
         UNCATEGORIZED_ID,
     };
 }

@@ -97,10 +97,27 @@ const LessonManagement: React.FC = () => {
     const openCreate = () => { setEditing(null); setOpenForm(true); };
     const openEdit = (l: Lesson) => { setEditing(l); setOpenForm(true); };
 
+    /**
+     * Bulk-create lessons. BE requires a chapter: defaults to a new chapter
+     * named "Chương mới" (admin can rename later via inline-edit in CurriculumBuilder).
+     * Future: dialog should let admin pick existing chapter or set chapter title.
+     */
     const handleCreate = async (payloads: LessonRequest[]) => {
         if (!courseId) return;
         try {
-            const created = await lessonService.createLessons(Number(courseId), payloads);
+            const nextOrder = lessons.length > 0
+                ? Math.max(...lessons.map((l) => l.orderIndex ?? 0)) + 1
+                : 0;
+            const newChapterTitle = `Chương ${
+                lessons.filter((l, idx, arr) => arr.findIndex((x) => x.chapterId === l.chapterId) === idx).length + 1
+            }`;
+            const { lessons: created, chapterTitle } = await lessonService.createLessons(
+                Number(courseId),
+                {
+                    newChapter: { title: newChapterTitle, orderIndex: nextOrder },
+                    lessons: payloads,
+                },
+            );
             const mapped: Lesson[] = (created || []).map((r: any) => ({
                 id: Number(r.id),
                 orderIndex: r.orderIndex ?? 0,
@@ -118,7 +135,7 @@ const LessonManagement: React.FC = () => {
                 isActive: r.isActive ?? true,
             }));
             setLessons((prev) => [...prev, ...mapped]);
-            toast.success(`Đã thêm ${mapped.length} bài học`);
+            toast.success(`Đã thêm ${mapped.length} bài học vào chương "${chapterTitle}"`);
             setOpenForm(false);
         } catch (err) {
             console.error(err);

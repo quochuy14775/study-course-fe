@@ -119,12 +119,18 @@ const ArticlesPage: React.FC = () => {
     `${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} transition-all duration-500 delay-[${idx * 80}ms]`;
 
   return (
-    <main className="min-h-screen bg-[#f8fafc]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <main className="min-h-screen bg-ink-50 relative">
+      <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
+      <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
         {/* Header */}
-        <section className="mb-8">
-          <h1 className="text-4xl font-semibold text-slate-900 mb-3">Bài viết</h1>
-          <p className="text-lg text-slate-600">Đọc các bài viết mới nhất về lập trình, công nghệ web, và phát triển phần mềm</p>
+        <section className="mb-8 animate-fade-in-up">
+          <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
+            <span className="text-ink-400">~/</span>
+            <span>articles</span>
+            <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
+          </div>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink-900 mb-2 sm:mb-3">Bài viết</h1>
+          <p className="text-lg text-ink-600">Đọc các bài viết mới nhất về lập trình, công nghệ web, và phát triển phần mềm</p>
         </section>
 
         {/* Categories Filter */}
@@ -321,5 +327,6 @@ const ArticlesPage: React.FC = () => {
     </main>
   );
 };
+
 
 export default ArticlesPage;

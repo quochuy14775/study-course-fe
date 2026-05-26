@@ -87,7 +87,7 @@ export default function ChatBot() {
                                     EduHub AI
                                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-code-400 shadow-[0_0_8px_rgb(52,211,153)]" />
                                 </p>
-                                <p className="text-xs text-white/70 font-mono">Powered by Groq · Online</p>
+                                <p className="text-xs text-white/70 font-mono">Online</p>
                             </div>
                         </div>
                     </div>

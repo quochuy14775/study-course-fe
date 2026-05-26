@@ -9,6 +9,7 @@ import type {
     LessonMutationResponse,
     LessonsDeleteResponse,
     LessonsReorderResponse,
+    BulkCreateLessonsRequest,
 } from "../types/lesson";
 
 // ────────────────────────────────────────────────────────────
@@ -50,13 +51,25 @@ const lessonService = {
         return response.data;
     },
 
-    /** POST /api/Courses/{courseId}/Lessons — bulk create (BE accepts an array) */
+    /**
+     * POST /api/Courses/{courseId}/Lessons
+     * Bulk-create lessons within a chapter (existing or newly-created).
+     *
+     * Payload shape (must match BE BulkCreateLessonsRequest):
+     *   - To add into existing chapter: `{ chapterId: 5, lessons: [...] }`
+     *   - To create new chapter + lessons in one call:
+     *       `{ newChapter: { title: "Chương 1", orderIndex: 0 }, lessons: [...] }`
+     */
     createLessons: async (
         courseId: number | string,
-        payloads: LessonRequest[],
-    ): Promise<Lesson[]> => {
-        const response = await api.post<LessonsCreateResponse>(base(courseId), payloads);
-        return response.data.data;
+        payload: BulkCreateLessonsRequest,
+    ): Promise<{ lessons: Lesson[]; chapterId: number; chapterTitle: string }> => {
+        const response = await api.post<LessonsCreateResponse>(base(courseId), payload);
+        return {
+            lessons: response.data.data,
+            chapterId: response.data.chapterId,
+            chapterTitle: response.data.chapterTitle,
+        };
     },
 
     /** PUT /api/Courses/{courseId}/Lessons/{id} — update single */

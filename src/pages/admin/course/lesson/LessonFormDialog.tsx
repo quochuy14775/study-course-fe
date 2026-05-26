@@ -135,7 +135,7 @@ const SortableLesson: React.FC<{
 
                     <div className="flex gap-2 mt-3">
                         <div className="flex-1">
-                            <label className="block text-xs font-semibold text-ink-600 mb-1 flex items-center gap-1">
+                            <label className="flex text-xs font-semibold text-ink-600 mb-1 items-center gap-1">
                                 <Clock size={12}/>
                                 Thời lượng (phút)
                             </label>
@@ -155,7 +155,7 @@ const SortableLesson: React.FC<{
                         </div>
 
                         <div className="flex-1">
-                            <label className="block text-xs font-semibold text-ink-600 mb-1 flex items-center gap-1">
+                            <label className="flex text-xs font-semibold text-ink-600 mb-1 items-center gap-1">
                                 <ImageIcon size={12}/>
                                 Thumbnail
                             </label>

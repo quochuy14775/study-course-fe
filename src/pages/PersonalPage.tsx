@@ -32,8 +32,19 @@ const PersonalPage: React.FC = () => {
     };
 
     return (
-        <main className="min-h-screen bg-[#f8fafc] py-12">
-            <div className="max-w-6xl mx-auto px-6 space-y-6">
+        <main className="min-h-screen bg-ink-50 relative">
+            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
+            <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6">
+
+                {/* Page header */}
+                <section className="animate-fade-in-up">
+                    <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
+                        <span className="text-ink-400">~/</span>
+                        <span>personal</span>
+                        <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink-900">Trang cá nhân</h1>
+                </section>
 
                 {/* TOP GRID: PROFILE & ACHIEVEMENTS */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -185,5 +196,6 @@ const PersonalPage: React.FC = () => {
         </main>
     );
 };
+
 
 export default PersonalPage;

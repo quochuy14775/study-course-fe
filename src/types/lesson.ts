@@ -31,11 +31,16 @@ export interface LessonListResponse {
     value: Lesson[];
 }
 
-/** Wrapper for bulk create — BE returns { success, message, data: Lesson[] } */
+/**
+ * Response from POST /Lessons (bulk create within a chapter).
+ * BE returns: { success, message, data: Lesson[], chapterId, chapterTitle }
+ */
 export interface LessonsCreateResponse {
     success: boolean;
     message: string;
     data: Lesson[];
+    chapterId: number;
+    chapterTitle: string;
 }
 
 /** Wrapper for single update — BE returns { success, message, data: Lesson } */
@@ -45,22 +50,23 @@ export interface LessonMutationResponse {
     data: Lesson;
 }
 
-/** Wrapper for bulk delete — BE returns { success, deleted } */
+/** Wrapper for bulk delete */
 export interface LessonsDeleteResponse {
     success: boolean;
     deleted: number;
 }
 
-/** Wrapper for reorder — BE returns { success, updated } */
+/** Wrapper for reorder */
 export interface LessonsReorderResponse {
     success: boolean;
     updated: number;
 }
 
 // ────────────────────────────────────────────────────────────
-// Request DTO — must match BE LessonRequest
+// Request DTOs
 // ────────────────────────────────────────────────────────────
 
+/** Single lesson payload — must match BE LessonRequest */
 export interface LessonRequest {
     orderIndex: number;
     title: string;
@@ -74,6 +80,28 @@ export interface LessonRequest {
     isActive?: boolean;
 }
 
+/** Inline chapter creation when bulk-creating lessons — matches BE CreateChapterDto */
+export interface NewChapterDto {
+    title: string;
+    description?: string | null;
+    orderIndex?: number;
+}
+
+/**
+ * Body for POST /api/Courses/{courseId}/Lessons — matches BE BulkCreateLessonsRequest.
+ * One request = one chapter (existing or new) + its lessons.
+ *
+ * Rules (priority top → bottom):
+ *  1. If `newChapter` provided → create new chapter, attach all lessons to it.
+ *  2. Else if `chapterId` provided → use that existing chapter.
+ *  3. Else → BE returns 400.
+ */
+export interface BulkCreateLessonsRequest {
+    chapterId?: number;
+    newChapter?: NewChapterDto;
+    lessons: LessonRequest[];
+}
+
 /** Payload item for PUT /Lessons/reorder */
 export interface LessonReorderItem {
     id: number;
@@ -82,7 +110,27 @@ export interface LessonReorderItem {
 }
 
 // ────────────────────────────────────────────────────────────
-// Legacy alias (kept for backward compatibility with existing imports)
+// Chapter (returned by Course detail / chapter endpoints)
+// ────────────────────────────────────────────────────────────
+
+export interface Chapter {
+    id: number;
+    title: string;
+    description?: string | null;
+    orderIndex: number;
+    courseId: number;
+    lessonCount: number;
+    totalDurationSeconds: number;
+
+    // Audit
+    createdAt: string;
+    updatedAt?: string | null;
+    isDeleted: boolean;
+    isActive: boolean;
+}
+
+// ────────────────────────────────────────────────────────────
+// Legacy alias
 // ────────────────────────────────────────────────────────────
 
 export type LessonResponse = Lesson;

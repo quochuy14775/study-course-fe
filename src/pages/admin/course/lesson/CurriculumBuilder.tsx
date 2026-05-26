@@ -8,12 +8,13 @@ import {
     closestCenter, DragEndEvent,
 } from '@dnd-kit/core';
 import {
-    SortableContext, useSortable, verticalListSortingStrategy,
+    SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
 } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
-import type { Lesson } from '../../../../types/lesson';
+import type { Lesson, LessonReorderItem } from '../../../../types/lesson';
 import { useChapters, type Chapter } from '../../../../hooks/useChapters';
+import lessonService from '../../../../services/lessonService';
 
 // ---------------------------------------------------------------------------
 // Utils
@@ -197,12 +198,11 @@ interface SortableChapterProps {
     onEditLesson: (lesson: Lesson) => void;
     onDeleteLesson: (id: number) => void;
     onMoveLessonToChapter: (lessonId: number, targetId: string) => void;
-    onReorderLessons: (oldIndex: number, newIndex: number) => void;
 }
 
 const SortableChapter: React.FC<SortableChapterProps> = ({
     chapter, chapters, lessons, isUncategorized, onToggle, onRename, onDelete,
-    onEditLesson, onDeleteLesson, onMoveLessonToChapter, onReorderLessons,
+    onEditLesson, onDeleteLesson, onMoveLessonToChapter,
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: `chapter:${chapter.id}`,
@@ -228,19 +228,6 @@ const SortableChapter: React.FC<SortableChapterProps> = ({
         .filter((l): l is Lesson => !!l);
 
     const totalDuration = lessonsInChapter.reduce((sum, l) => sum + (l.duration ?? 0), 0);
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-        useSensor(KeyboardSensor),
-    );
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) return;
-        const oldIndex = chapter.lessonIds.findIndex((id) => `lesson:${id}` === active.id);
-        const newIndex = chapter.lessonIds.findIndex((id) => `lesson:${id}` === over.id);
-        if (oldIndex >= 0 && newIndex >= 0) onReorderLessons(oldIndex, newIndex);
-    };
 
     const commitRename = () => {
         const t = titleDraft.trim();
@@ -353,32 +340,25 @@ const SortableChapter: React.FC<SortableChapterProps> = ({
                             <p className="text-xs text-ink-400 mt-1">Kéo thả bài học từ chương khác hoặc thêm mới</p>
                         </div>
                     ) : (
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                            onDragEnd={handleDragEnd}
+                        <SortableContext
+                            items={lessonsInChapter.map((l) => `lesson:${l.id}`)}
+                            strategy={verticalListSortingStrategy}
                         >
-                            <SortableContext
-                                items={lessonsInChapter.map((l) => `lesson:${l.id}`)}
-                                strategy={verticalListSortingStrategy}
-                            >
-                                <div className="space-y-2">
-                                    {lessonsInChapter.map((lesson, i) => (
-                                        <SortableLesson
-                                            key={lesson.id}
-                                            lesson={lesson}
-                                            indexInChapter={i}
-                                            chapters={chapters}
-                                            currentChapterId={chapter.id}
-                                            onEdit={() => onEditLesson(lesson)}
-                                            onDelete={() => onDeleteLesson(lesson.id)}
-                                            onMoveToChapter={(target) => onMoveLessonToChapter(lesson.id, target)}
-                                        />
-                                    ))}
-                                </div>
-                            </SortableContext>
-                        </DndContext>
+                            <div className="space-y-2">
+                                {lessonsInChapter.map((lesson, i) => (
+                                    <SortableLesson
+                                        key={lesson.id}
+                                        lesson={lesson}
+                                        indexInChapter={i}
+                                        chapters={chapters}
+                                        currentChapterId={chapter.id}
+                                        onEdit={() => onEditLesson(lesson)}
+                                        onDelete={() => onDeleteLesson(lesson.id)}
+                                        onMoveToChapter={(target) => onMoveLessonToChapter(lesson.id, target)}
+                                    />
+                                ))}
+                            </div>
+                        </SortableContext>
                     )}
                 </div>
             )}
@@ -401,11 +381,34 @@ interface CurriculumBuilderProps {
 const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
     courseId, lessons, onAddLesson, onEditLesson, onDeleteLesson,
 }) => {
-    const allLessonIds = useMemo(() => lessons.map((l) => l.id), [lessons]);
+    const allLessons = useMemo(
+        () => lessons.map((l) => ({ id: l.id, chapterId: l.chapterId ?? null })),
+        [lessons],
+    );
     const {
         chapters, addChapter, renameChapter, deleteChapter, toggleCollapse,
-        reorderChapters, reorderLessonsInChapter, moveLessonToChapter, UNCATEGORIZED_ID,
-    } = useChapters(courseId, allLessonIds);
+        reorderChapters, reorderLessonsInChapter, moveLessonToChapter, moveLessonToChapterAtIndex, UNCATEGORIZED_ID,
+    } = useChapters(courseId, allLessons);
+
+    // Extract BE chapterId from FE chapter string ID ("ch_be_5" → 5, others → null)
+    const getBeChapterId = (feChapterId: string): number | null => {
+        if (feChapterId.startsWith('ch_be_')) return Number(feChapterId.slice(6));
+        return null;
+    };
+
+    // For a lesson being placed in a FE chapter, resolve the BE chapterId to sync.
+    // For FE-only chapters (no BE backing), preserve the lesson's existing chapterId.
+    const resolveBeChapterId = (lessonId: number, feChapterId: string): number | null => {
+        const fromFe = getBeChapterId(feChapterId);
+        if (fromFe !== null) return fromFe;
+        if (feChapterId === UNCATEGORIZED_ID) return null;
+        return lessons.find((l) => l.id === lessonId)?.chapterId ?? null;
+    };
+
+    const syncReorder = (items: LessonReorderItem[]) => {
+        if (items.length === 0) return;
+        lessonService.reorderLessons(courseId, items).catch(console.error);
+    };
 
     const [addingChapter, setAddingChapter] = useState(false);
     const [newChapterTitle, setNewChapterTitle] = useState('');
@@ -420,13 +423,76 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
         useSensor(KeyboardSensor),
     );
 
-    const handleChapterDragEnd = (event: DragEndEvent) => {
+    const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
-        const ids = chapters.map((c) => `chapter:${c.id}`);
-        const oldIndex = ids.indexOf(String(active.id));
-        const newIndex = ids.indexOf(String(over.id));
-        if (oldIndex >= 0 && newIndex >= 0) reorderChapters(oldIndex, newIndex);
+
+        const activeId = String(active.id);
+        const overId = String(over.id);
+
+        if (activeId.startsWith('chapter:') && overId.startsWith('chapter:')) {
+            const ids = chapters.map((c) => `chapter:${c.id}`);
+            const oldIndex = ids.indexOf(activeId);
+            const newIndex = ids.indexOf(overId);
+            if (oldIndex >= 0 && newIndex >= 0) reorderChapters(oldIndex, newIndex);
+            return;
+        }
+
+        if (activeId.startsWith('lesson:')) {
+            const activeLessonId = Number(activeId.replace('lesson:', ''));
+            const sourceChapter = chapters.find((c) => c.lessonIds.includes(activeLessonId));
+            if (!sourceChapter) return;
+
+            if (overId.startsWith('lesson:')) {
+                const overLessonId = Number(overId.replace('lesson:', ''));
+                const targetChapter = chapters.find((c) => c.lessonIds.includes(overLessonId));
+                if (!targetChapter) return;
+
+                if (sourceChapter.id === targetChapter.id) {
+                    const oldIndex = sourceChapter.lessonIds.indexOf(activeLessonId);
+                    const newIndex = targetChapter.lessonIds.indexOf(overLessonId);
+                    reorderLessonsInChapter(sourceChapter.id, oldIndex, newIndex);
+
+                    const newIds = arrayMove([...sourceChapter.lessonIds], oldIndex, newIndex);
+                    syncReorder(newIds.map((id, idx) => ({
+                        id,
+                        orderIndex: idx,
+                        chapterId: resolveBeChapterId(id, sourceChapter.id),
+                    })));
+                } else {
+                    const targetIndex = targetChapter.lessonIds.indexOf(overLessonId);
+                    moveLessonToChapterAtIndex(activeLessonId, targetChapter.id, targetIndex);
+
+                    const newSourceIds = sourceChapter.lessonIds.filter((id) => id !== activeLessonId);
+                    const newTargetIds = [...targetChapter.lessonIds];
+                    newTargetIds.splice(targetIndex, 0, activeLessonId);
+                    syncReorder([
+                        ...newSourceIds.map((id, idx) => ({
+                            id, orderIndex: idx,
+                            chapterId: resolveBeChapterId(id, sourceChapter.id),
+                        })),
+                        ...newTargetIds.map((id, idx) => ({
+                            id, orderIndex: idx,
+                            chapterId: resolveBeChapterId(id, targetChapter.id),
+                        })),
+                    ]);
+                }
+            } else if (overId.startsWith('chapter:')) {
+                const targetChapterId = overId.replace('chapter:', '');
+                if (sourceChapter.id !== targetChapterId) {
+                    moveLessonToChapter(activeLessonId, targetChapterId);
+
+                    const targetChapter = chapters.find((c) => c.id === targetChapterId);
+                    if (targetChapter) {
+                        const newTargetIds = [...targetChapter.lessonIds, activeLessonId];
+                        syncReorder(newTargetIds.map((id, idx) => ({
+                            id, orderIndex: idx,
+                            chapterId: resolveBeChapterId(id, targetChapterId),
+                        })));
+                    }
+                }
+            }
+        }
     };
 
     const handleAddChapter = () => {
@@ -459,8 +525,8 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
-                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                    onDragEnd={handleChapterDragEnd}
+                    modifiers={[restrictToVerticalAxis]}
+                    onDragEnd={handleDragEnd}
                 >
                     <SortableContext
                         items={chapters.map((c) => `chapter:${c.id}`)}
@@ -480,7 +546,6 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
                                     onEditLesson={onEditLesson}
                                     onDeleteLesson={onDeleteLesson}
                                     onMoveLessonToChapter={moveLessonToChapter}
-                                    onReorderLessons={(o, n) => reorderLessonsInChapter(chapter.id, o, n)}
                                 />
                             ))}
                         </div>

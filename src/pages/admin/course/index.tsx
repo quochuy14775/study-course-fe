@@ -190,15 +190,20 @@ const CourseManagement: React.FC = () => {
     };
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 bg-white/50 min-h-screen">
-            <div className="max-w-6xl mx-auto">
+        <main className="min-h-screen bg-ink-50 relative">
+            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
+            <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
 
                 {/* HEADER */}
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 sm:mb-8">
-                    <div>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6 sm:mb-8 animate-fade-in-up">
+                    <section>
+                        <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
+                            <span className="text-ink-400">~/</span>
+                            <span>management</span>
+                            <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
+                        </div>
                         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink-900">Quản lý khóa học</h1>
-                        <div className="h-0.5 w-32 mt-2 sm:mt-3 rounded bg-gradient-to-r from-primary-600 to-accent-600" />
-                    </div>
+                    </section>
                     <button
                         onClick={() => setShowAddCourseModal(true)}
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-primary-600 to-accent-600 text-white font-semibold rounded-xl shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all"
@@ -339,7 +344,7 @@ const CourseManagement: React.FC = () => {
                 onClose={() => setShowAddCourseModal(false)}
                 onSubmit={handleAddCourse}
             />
-        </div>
+        </main>
     );
 };
 
