@@ -1,13 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+code, .font-mono {
+  font-family: 'JetBrains Mono', source-code-pro, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Selection */
+::selection {
+  background: rgba(99, 102, 241, 0.2);
+  color: #312e81;
+}
+
+/* Smooth focus rings */
+*:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Custom cursors — Paper-plane / Linear-style
+   Default: solid dark with white outline (visible everywhere)
+   Pointer: indigo fill + violet accent dot for interactive feedback
+   Text:    indigo I-beam matching theme
+   ─────────────────────────────────────────────────────────── */
+
+/* Default — paper-plane cursor, dark fill, white outline */
+* {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><path d="M5.5 3.5 L27 18 L16 19 L11 28 Z" fill="%230f172a" stroke="white" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>') 4 3, auto;
+}
+
+/* Pointer — indigo paper-plane + violet accent dot */
+button,
+a,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+[role="button"],
+.cursor-pointer,
+summary,
+label[for] {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><path d="M5.5 3.5 L27 18 L16 19 L11 28 Z" fill="%236366f1" stroke="white" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/><circle cx="26" cy="6" r="2.8" fill="%237c3aed" stroke="white" stroke-width="1"/></svg>') 4 3, pointer;
+}
+
+/* Text I-beam cursor for input fields — indigo theme */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input:not([type]),
+textarea,
+[contenteditable="true"] {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 24" width="14" height="20"><path d="M4 2 H12 M4 22 H12 M8 3 V21" stroke="%236366f1" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M4 2 H12 M4 22 H12 M8 3 V21" stroke="white" stroke-width="0.6" fill="none" stroke-linecap="round"/></svg>') 7 10, text;
+}
+
+/* Disabled state */
+button:disabled,
+[disabled],
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+}
+
+/* Grab cursor for draggable items */
+[draggable="true"],
+.cursor-grab {
+  cursor: grab;
+}
+
+[draggable="true"]:active,
+.cursor-grab:active {
+  cursor: grabbing;
+}
+
+/* Shimmer loading effect */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.4) 0%,
+    rgba(226, 232, 240, 0.7) 50%,
+    rgba(226, 232, 240, 0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Card hover lift */
+.card-lift {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.12);
 }
