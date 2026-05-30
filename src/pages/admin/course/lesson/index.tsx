@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { showToast } from '../../../../components/CustomToast';
 import { ChevronLeft, Settings, BookOpen, Loader2, Eye } from 'lucide-react';

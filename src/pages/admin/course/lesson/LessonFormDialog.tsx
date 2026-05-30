@@ -140,7 +140,7 @@ const SortableLesson: React.FC<{
             setFetchingDuration(false);
         });
         return () => { cancelled = true; };
-    }, [item.videoId]);
+    }, [item.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
     const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
         transition: transition || undefined,

@@ -32,7 +32,7 @@ export default function VerifyEmailPage() {
                 else setErrorMsg(typeof msg === 'string' ? msg : 'Verification failed. The link may have expired.');
                 setStatus('error');
             });
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-primary-500 via-accent-500 to-secondary-500 flex items-center justify-center px-4">

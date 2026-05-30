@@ -289,7 +289,7 @@ const LearnPage: React.FC = () => {
         if (!currentLesson) return;
         setComments(seedComments(currentLesson.id));
         setQaList(seedQA(currentLesson.id));
-    }, [currentLesson?.id]);
+    }, [currentLesson, currentLesson?.id]);
 
     useEffect(() => {
         if (!loading && allLessons.length > 0 && !lessonId)

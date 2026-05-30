@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { showToast } from "../../../components/CustomToast";
 import { CourseRequest, CourseUI, Level, LEVEL_LABEL_TO_NUMBER } from "../../../types/course";
 import CustomDropdown from "../../../components/CustomDropdown";
