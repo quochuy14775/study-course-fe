@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, Trash2, ChevronRight, Star, Image as ImageIcon } from 'lucide-react';
+import { Tag, Trash2, ChevronRight, Star, Image as ImageIcon, Pencil } from 'lucide-react';
 import { CourseUI, Level } from '../../../types/course';
 import LessonSummary from './lesson/LessonSummary';
 
@@ -7,6 +7,7 @@ interface Props {
     course: CourseUI;
     onClick?: (id: number) => void;
     onDelete?: (id: number) => void;
+    onEdit?: (course: CourseUI) => void;
 }
 
 const LEVEL_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
@@ -21,7 +22,7 @@ const levelLabel = (l: any): string => {
     return 'Beginner';
 };
 
-const CourseListItem: React.FC<Props> = ({ course, onClick, onDelete }) => {
+const CourseListItem: React.FC<Props> = ({ course, onClick, onDelete, onEdit }) => {
     const levelKey = levelLabel(course.level);
     const levelStyle = LEVEL_STYLES[levelKey] ?? LEVEL_STYLES.Beginner;
 
@@ -38,13 +39,20 @@ const CourseListItem: React.FC<Props> = ({ course, onClick, onDelete }) => {
                             src={course.imageUrl}
                             alt={course.title}
                             className="w-full h-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.style.display = 'none';
+                                const placeholder = img.nextElementSibling as HTMLElement;
+                                if (placeholder) placeholder.style.display = 'flex';
+                            }}
                         />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <ImageIcon className="w-6 h-6 text-primary-400" />
-                        </div>
-                    )}
+                    ) : null}
+                    <div
+                        className="w-full h-full items-center justify-center"
+                        style={{ display: course.imageUrl ? 'none' : 'flex' }}
+                    >
+                        <ImageIcon className="w-6 h-6 text-primary-400" />
+                    </div>
                     {course.isFeatured && (
                         <div className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/95 text-white text-[10px] font-bold shadow-sm backdrop-blur-sm">
                             <Star size={9} fill="white" /> FEATURED
@@ -100,15 +108,26 @@ const CourseListItem: React.FC<Props> = ({ course, onClick, onDelete }) => {
 
                 {/* Right actions */}
                 <div className="flex flex-col items-end justify-between flex-shrink-0">
-                    {onDelete && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onDelete(course.id); }}
-                            className="p-2 rounded-lg text-ink-400 hover:text-rose-600 hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
-                            title="Xóa khóa học"
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                    )}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {onEdit && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onEdit(course); }}
+                                className="p-2 rounded-lg text-ink-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                                title="Chỉnh sửa khóa học"
+                            >
+                                <Pencil size={14} />
+                            </button>
+                        )}
+                        {onDelete && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onDelete(course.id); }}
+                                className="p-2 rounded-lg text-ink-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Xóa khóa học"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        )}
+                    </div>
                     <div className="flex items-center gap-1 text-xs text-ink-400 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all">
                         <span className="font-medium hidden sm:inline">Curriculum</span>
                         <ChevronRight size={14} />

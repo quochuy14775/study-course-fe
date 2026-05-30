@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { showToast } from '../../../../components/CustomToast';
 import { ChevronLeft, Settings, BookOpen, Loader2, Eye } from 'lucide-react';
 import lessonService from '../../../../services/lessonService';
 import courseService from '../../../../services/courseServices';
 import { Lesson, LessonRequest } from '../../../../types/lesson';
 import LessonFormDialog from './LessonFormDialog';
+import DeleteLessonDialog from './DeleteLessonDialog';
 import CurriculumBuilder from './CurriculumBuilder';
 
 interface LocationState {
@@ -35,6 +36,7 @@ const LessonManagement: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [openForm, setOpenForm] = useState(false);
     const [editing, setEditing] = useState<Lesson | null>(null);
+    const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
     const [tab, setTab] = useState<Tab>('curriculum');
 
     /* Fetch course + lessons */
@@ -84,7 +86,7 @@ const LessonManagement: React.FC = () => {
                 setLessons(mapped);
             } catch (err) {
                 console.error(err);
-                toast.error('Không tải được dữ liệu khóa học');
+                showToast.error('Không tải được dữ liệu khóa học');
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -105,18 +107,9 @@ const LessonManagement: React.FC = () => {
     const handleCreate = async (payloads: LessonRequest[]) => {
         if (!courseId) return;
         try {
-            const nextOrder = lessons.length > 0
-                ? Math.max(...lessons.map((l) => l.orderIndex ?? 0)) + 1
-                : 0;
-            const newChapterTitle = `Chương ${
-                lessons.filter((l, idx, arr) => arr.findIndex((x) => x.chapterId === l.chapterId) === idx).length + 1
-            }`;
             const { lessons: created, chapterTitle } = await lessonService.createLessons(
                 Number(courseId),
-                {
-                    newChapter: { title: newChapterTitle, orderIndex: nextOrder },
-                    lessons: payloads,
-                },
+                { lessons: payloads }, // không có chapter → BE trả về chapterId null → FE xếp vào "Chưa phân loại"
             );
             const mapped: Lesson[] = (created || []).map((r: any) => ({
                 id: Number(r.id),
@@ -135,11 +128,11 @@ const LessonManagement: React.FC = () => {
                 isActive: r.isActive ?? true,
             }));
             setLessons((prev) => [...prev, ...mapped]);
-            toast.success(`Đã thêm ${mapped.length} bài học vào chương "${chapterTitle}"`);
+            showToast.success(`Đã thêm ${mapped.length} bài học vào chương "${chapterTitle}"`);
             setOpenForm(false);
         } catch (err) {
             console.error(err);
-            toast.error('Tạo bài học thất bại');
+            showToast.error('Tạo bài học thất bại');
         }
     };
 
@@ -152,27 +145,26 @@ const LessonManagement: React.FC = () => {
                     ? { ...l, ...updated, id: Number(updated.id ?? l.id) }
                     : l
             )));
-            toast.success('Cập nhật bài học thành công');
+            showToast.success('Cập nhật bài học thành công');
             setOpenForm(false);
         } catch (err) {
             console.error(err);
-            toast.error('Cập nhật thất bại');
+            showToast.error('Cập nhật thất bại');
         }
     };
 
     const handleDelete = async (id: number) => {
         if (!courseId) return;
-        if (!window.confirm('Xóa bài học này?')) return;
-
         const original = [...lessons];
         setLessons((prev) => prev.filter((l) => l.id !== id));
+        setDeletingLesson(null);
 
         try {
             await lessonService.deleteLessons(Number(courseId), [id]);
-            toast.success('Đã xóa bài học');
+            showToast.success('Đã xóa bài học');
         } catch (err) {
             console.error(err);
-            toast.error('Xóa thất bại');
+            showToast.error('Xóa thất bại');
             setLessons(original);
         }
     };
@@ -251,7 +243,7 @@ const LessonManagement: React.FC = () => {
                             lessons={lessons}
                             onAddLesson={openCreate}
                             onEditLesson={openEdit}
-                            onDeleteLesson={handleDelete}
+                            onDeleteLesson={(id) => setDeletingLesson(lessons.find(l => l.id === id) ?? null)}
                         />
                     </div>
                 ) : (
@@ -278,6 +270,12 @@ const LessonManagement: React.FC = () => {
                         editing={editing}
                     />
                 )}
+
+                <DeleteLessonDialog
+                    lesson={deletingLesson}
+                    onClose={() => setDeletingLesson(null)}
+                    onConfirm={handleDelete}
+                />
             </div>
         </div>
     );
@@ -310,3 +308,4 @@ const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) =
 );
 
 export default LessonManagement;
+

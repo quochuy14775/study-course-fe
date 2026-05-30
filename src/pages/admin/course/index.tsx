@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { toast } from "react-toastify";
+﻿import React, { useState, useEffect } from 'react';
+import { showToast } from "../../../components/CustomToast";
 import {
     Plus, Search, ChevronLeft, ChevronRight,
     List, Gift, DollarSign, Leaf, TrendingUp, Flame
 } from 'lucide-react';
 import { CourseRequest, CourseUI, mapCourseToUI } from "../../../types/course";
 import AddCourseDialog from "./AddCourseDialog";
+import EditCourseDialog from "./EditCourseDialog";
+import DeleteCourseDialog from "./DeleteCourseDialog";
 import CustomDropdown from "../../../components/CustomDropdown";
 import courseService from "../../../services/courseServices";
 import {ITEMS_PER_PAGE} from "../../../types/odata";
@@ -18,7 +20,9 @@ const CourseManagement: React.FC = () => {
     const [loading, setLoading]         = useState(true);
     const [error, setError]             = useState<string | null>(null);
 
-    const [showAddCourseModal, setShowAddCourseModal]   = useState(false);
+    const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+    const [editingCourse, setEditingCourse]           = useState<CourseUI | null>(null);
+    const [deletingCourse, setDeletingCourse]         = useState<CourseUI | null>(null);
 
     // UI-only state (does NOT directly trigger fetch)
     const [searchInput, setSearchInput] = useState(''); // immediate input value for debounce
@@ -133,7 +137,7 @@ const CourseManagement: React.FC = () => {
             });
 
             setTotalCount(prev => prev + 1);
-            toast.success("Tạo khóa học thành công! Hãy thêm bài học ngay.");
+            showToast.success("Tạo khóa học thành công! Hãy thêm bài học ngay.");
             setShowAddCourseModal(false);
             // Auto-redirect to curriculum builder so admin doesn't forget to add lessons
             const newId = response?.id ?? newCourse.id;
@@ -147,36 +151,46 @@ const CourseManagement: React.FC = () => {
             if (err?.response?.status === 400) {
                 throw err;
             }
-            toast.error(err.response?.data?.message || 'Create failed');
+            showToast.error(err.response?.data?.message || 'Create failed');
             throw err;
         }
     };
 
     const handleDeleteCourse = async (id: number) => {
-        if (!window.confirm('Xóa khóa học?')) return;
-
         const originalCourses = [...courses];
         const originalTotal = totalCount;
 
-        // Optimistic update
         setCourses(prev => {
             const remaining = prev.filter(c => c.id !== id);
-            if (remaining.length === 0 && query.page > 1) {
+            if (remaining.length === 0 && query.page > 1)
                 setQuery(q => ({ ...q, page: q.page - 1 }));
-            }
             return remaining;
         });
         setTotalCount(prev => Math.max(0, prev - 1));
+        setDeletingCourse(null);
 
         try {
             await courseService.deleteCourses([String(id)]);
-            toast.success("Xóa khóa học thành công");
+            showToast.success("Xóa khóa học thành công");
         } catch (err) {
             console.error('Delete failed', err);
-            toast.error('Xóa thất bại, đang hoàn tác...');
-            // Rollback on failure
+            showToast.error('Xóa thất bại, đang hoàn tác...');
             setCourses(originalCourses);
             setTotalCount(originalTotal);
+        }
+    };
+
+    const handleUpdateCourse = async (id: number, data: CourseRequest) => {
+        try {
+            const updated = await courseService.updateCourse(id, data);
+            setCourses(prev => prev.map(c => c.id === id ? mapCourseToUI(updated) : c));
+            showToast.success("Cập nhật khóa học thành công");
+            setEditingCourse(null);
+            return updated;
+        } catch (err: any) {
+            if (err?.response?.status === 400) throw err;
+            showToast.error(err?.response?.data?.message || "Cập nhật thất bại");
+            throw err;
         }
     };
 
@@ -298,7 +312,7 @@ const CourseManagement: React.FC = () => {
                         <div className={`transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
                             {courses.length > 0 ? (
                                 courses.map(course => (
-                                    <CourseListItem key={course.id} course={course} onClick={() => openLessons(course.id, course.title)} onDelete={handleDeleteCourse} />
+                                    <CourseListItem key={course.id} course={course} onClick={() => openLessons(course.id, course.title)} onDelete={(id) => setDeletingCourse(courses.find(c => c.id === id) ?? null)} onEdit={setEditingCourse} />
                                 ))
                             ) : (
                                 !loading && (
@@ -344,8 +358,22 @@ const CourseManagement: React.FC = () => {
                 onClose={() => setShowAddCourseModal(false)}
                 onSubmit={handleAddCourse}
             />
+
+            <EditCourseDialog
+                open={editingCourse !== null}
+                course={editingCourse}
+                onClose={() => setEditingCourse(null)}
+                onSubmit={handleUpdateCourse}
+            />
+
+            <DeleteCourseDialog
+                course={deletingCourse}
+                onClose={() => setDeletingCourse(null)}
+                onConfirm={handleDeleteCourse}
+            />
         </main>
     );
 };
 
 export default CourseManagement;
+

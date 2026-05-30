@@ -7,7 +7,9 @@ import HomePage from './pages/HomePage';
 import RoadmapPage from './pages/RoadmapPage';
 import ArticlesPage from './pages/ArticlesPage';
 import PersonalPage from './pages/PersonalPage';
-import LoginPage from './components/Login';
+import AuthPage from './components/AuthPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import SetupAccountPage from './pages/SetupAccountPage';
 import CourseManagement from "./pages/admin/course";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -84,7 +86,10 @@ function App() {
         <Router>
             <ToastContainer position="top-right" autoClose={3000} />
             <Routes>
-                <Route path="/login" element={<LoginPage />} />
+                <Route path="/login" element={<AuthPage />} />
+                <Route path="/signup" element={<AuthPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/setup-account" element={<SetupAccountPage />} />
                 <Route
                     path="/*"
                     element={

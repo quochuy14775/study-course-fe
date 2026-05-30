@@ -25,6 +25,48 @@ import {
 } from '@dnd-kit/sortable';
 import {CSS} from '@dnd-kit/utilities';
 
+function parseYouTubeId(input: string): string {
+    const s = input.trim();
+    try {
+        const url = new URL(s);
+        if (url.hostname.includes('youtu.be')) return url.pathname.slice(1).split('?')[0];
+        if (url.searchParams.has('v')) return url.searchParams.get('v')!;
+        if (url.pathname.startsWith('/embed/')) return url.pathname.split('/embed/')[1].split('?')[0];
+    } catch {}
+    return s;
+}
+
+/** Parse ISO 8601 duration (PT1H2M3S) → seconds */
+function parseIsoDuration(iso: string): number {
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!m) return 0;
+    return (Number(m[1] ?? 0) * 3600) + (Number(m[2] ?? 0) * 60) + Number(m[3] ?? 0);
+}
+
+interface YouTubeMeta { title: string; duration: number; thumbnailUrl: string }
+
+async function fetchYouTubeMeta(videoId: string): Promise<YouTubeMeta | null> {
+    const key = process.env.REACT_APP_YOUTUBE_API_KEY;
+    if (!key || !videoId) return null;
+    try {
+        const res = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,contentDetails&key=${key}`
+        );
+        const data = await res.json();
+        const item = data?.items?.[0];
+        if (!item) return null;
+        const title = item.snippet?.title ?? '';
+        const duration = parseIsoDuration(item.contentDetails?.duration ?? '');
+        const thumbnailUrl = item.snippet?.thumbnails?.high?.url
+            ?? item.snippet?.thumbnails?.medium?.url
+            ?? item.snippet?.thumbnails?.default?.url
+            ?? '';
+        return { title, duration, thumbnailUrl };
+    } catch {
+        return null;
+    }
+}
+
 interface Props {
     open: boolean;
     onClose: () => void;
@@ -66,7 +108,7 @@ const emptyTemp = (idx = 1): TempLesson => ({
     tempId: uuidv4(),
     title: '',
     videoId: '',
-    duration: 30 * 60,
+    duration: null,
     thumbnailUrl: null,
     orderIndex: idx,
     isActive: true,
@@ -79,8 +121,26 @@ const SortableLesson: React.FC<{
     refs: React.MutableRefObject<Record<string, HTMLInputElement | null>>;
     updateItemField: (tempId: string, field: keyof TempLesson, value: any) => void;
     deleteItem: (tempId: string) => void;
-}> = ({item, errors, refs, updateItemField, deleteItem}) => {
+    onVideoIdChange: (tempId: string, videoId: string) => void;
+}> = ({item, errors, refs, updateItemField, deleteItem, onVideoIdChange}) => {
+    const [fetchingDuration, setFetchingDuration] = useState(false);
     const {attributes, listeners, setNodeRef, transform, transition, isDragging} = useSortable({id: item.tempId});
+
+    // Auto-fetch title + duration + thumbnail khi videoId thay đổi
+    useEffect(() => {
+        const id = item.videoId?.trim();
+        if (!id || id.length < 6) return;
+        let cancelled = false;
+        setFetchingDuration(true);
+        fetchYouTubeMeta(id).then(meta => {
+            if (cancelled || !meta) return;
+            if (meta.duration) updateItemField(item.tempId, 'duration', meta.duration);
+            if (meta.title && !item.title) updateItemField(item.tempId, 'title', meta.title);
+            if (meta.thumbnailUrl && !item.thumbnailUrl) updateItemField(item.tempId, 'thumbnailUrl', meta.thumbnailUrl);
+            setFetchingDuration(false);
+        });
+        return () => { cancelled = true; };
+    }, [item.videoId]);
     const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
         transition: transition || undefined,
@@ -120,38 +180,45 @@ const SortableLesson: React.FC<{
                     {errors[item.tempId]?.title &&
                         <p className="text-rose-600 text-xs mt-1">{errors[item.tempId].title}</p>}
 
-                    <label className="block text-xs font-semibold text-ink-600 mt-3">Video ID</label>
+                    <label className="block text-xs font-semibold text-ink-600 mt-3">YouTube URL hoặc Video ID</label>
                     <input
-                        ref={el => {
-                            refs.current[`${item.tempId}-videoId`] = el
-                        }}
+                        ref={el => { refs.current[`${item.tempId}-videoId`] = el }}
                         value={item.videoId}
-                        onChange={e => updateItemField(item.tempId, 'videoId', e.target.value)}
+                        onChange={e => onVideoIdChange(item.tempId, parseYouTubeId(e.target.value))}
                         className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-300 ${errors[item.tempId]?.videoId ? 'border-rose-300 ring-rose-100' : 'border-ink-200'}`}
-                        placeholder="Video ID"
+                        placeholder="https://youtube.com/watch?v=... hoặc ID"
                     />
                     {errors[item.tempId]?.videoId &&
                         <p className="text-rose-600 text-xs mt-1">{errors[item.tempId].videoId}</p>}
+                    {fetchingDuration && (
+                        <p className="text-xs text-primary-500 mt-1 flex items-center gap-1">
+                            <Clock size={11} className="animate-spin" /> Đang lấy thời lượng...
+                        </p>
+                    )}
+                    {item.videoId && (
+                        <div className="mt-2 rounded-lg overflow-hidden border border-ink-200 aspect-video">
+                            <iframe
+                                src={`https://www.youtube.com/embed/${item.videoId}`}
+                                className="w-full h-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                title="preview"
+                            />
+                        </div>
+                    )}
 
                     <div className="flex gap-2 mt-3">
                         <div className="flex-1">
                             <label className="flex text-xs font-semibold text-ink-600 mb-1 items-center gap-1">
                                 <Clock size={12}/>
-                                Thời lượng (phút)
+                                Thời lượng
                             </label>
-                            <input
-                                ref={el => {
-                                    refs.current[`${item.tempId}-duration`] = el
-                                }}
-                                value={Math.round((item.duration ?? 0) / 60)}
-                                onChange={e => {
-                                    const mins = Number(e.target.value);
-                                    updateItemField(item.tempId, 'duration', Number.isNaN(mins) ? 0 : mins * 60);
-                                }}
-                                className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-300 ${errors[item.tempId]?.duration ? 'border-rose-300 ring-rose-100' : 'border-ink-200'}`}
-                                type="number"
-                                aria-label="Duration minutes"
-                            />
+                            <div className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 bg-ink-50 ${errors[item.tempId]?.duration ? 'border-rose-300' : 'border-ink-200'}`}>
+                                {item.duration
+                                    ? `${Math.floor(item.duration / 60)}p ${item.duration % 60}s`
+                                    : <span className="text-ink-400 text-xs">Tự động từ video</span>
+                                }
+                            </div>
                         </div>
 
                         <div className="flex-1">
@@ -238,6 +305,23 @@ const LessonFormDialog: React.FC<Props> = ({open, onClose, onCreate, onUpdate, e
         if (open) window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [open, onClose]);
+
+    // Auto-fetch title + duration + thumbnail cho single edit khi videoId thay đổi
+    useEffect(() => {
+        const id = singleForm.videoId?.trim();
+        if (!id || id.length < 6) return;
+        let cancelled = false;
+        fetchYouTubeMeta(id).then(meta => {
+            if (cancelled || !meta) return;
+            setSingleForm(prev => ({
+                ...prev,
+                ...(meta.duration ? { duration: meta.duration } : {}),
+                ...(meta.title && !prev.title ? { title: meta.title } : {}),
+                ...(meta.thumbnailUrl && !prev.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
+            }));
+        });
+        return () => { cancelled = true; };
+    }, [singleForm.videoId]);
 
     const recalcOrder = (list: TempLesson[]) => {
         return list.map((it, idx) => ({...it, orderIndex: idx + 1}));
@@ -429,16 +513,6 @@ const LessonFormDialog: React.FC<Props> = ({open, onClose, onCreate, onUpdate, e
                     // single edit UI
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-xs font-semibold text-ink-600 mb-1.5">Thứ tự</label>
-                            <input ref={el => {
-                                refs.current['orderIndex'] = el
-                            }} type="number" value={singleForm.orderIndex ?? 0}
-                                   onChange={e => setSingleForm({...singleForm, orderIndex: Number(e.target.value)})}
-                                   className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-300 ${errors.orderIndex ? 'border-rose-300 ring-rose-100' : 'border-ink-200'}`}/>
-                            {errors.orderIndex && <p className="text-rose-600 text-xs mt-1">{errors.orderIndex}</p>}
-                        </div>
-
-                        <div>
                             <label className="block text-xs font-semibold text-ink-600 mb-1.5">Tiêu đề</label>
                             <input ref={el => {
                                 refs.current['title'] = el
@@ -456,40 +530,41 @@ const LessonFormDialog: React.FC<Props> = ({open, onClose, onCreate, onUpdate, e
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-ink-600 mb-1.5">Video ID</label>
-                            <input ref={el => {
-                                refs.current['videoId'] = el
-                            }} value={singleForm.videoId ?? ''} onChange={e => {
-                                setSingleForm({...singleForm, videoId: e.target.value});
-                                setErrors(prev => {
-                                    const next = {...prev};
-                                    delete (next as any).videoId;
-                                    return next;
-                                });
-                            }}
-                                   className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-300 ${errors.videoId ? 'border-rose-300 ring-rose-100' : 'border-ink-200'}`}
-                                   placeholder="Video ID"/>
+                            <label className="block text-xs font-semibold text-ink-600 mb-1.5">YouTube URL hoặc Video ID</label>
+                            <input ref={el => { refs.current['videoId'] = el }}
+                                value={singleForm.videoId ?? ''}
+                                onChange={e => {
+                                    const id = parseYouTubeId(e.target.value);
+                                    setSingleForm(prev => ({...prev, videoId: id}));
+                                    setErrors(prev => { const next = {...prev}; delete (next as any).videoId; return next; });
+                                }}
+                                className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-300 ${errors.videoId ? 'border-rose-300 ring-rose-100' : 'border-ink-200'}`}
+                                placeholder="https://youtube.com/watch?v=... hoặc ID"
+                            />
                             {errors.videoId && <p className="text-rose-600 text-xs mt-1">{errors.videoId}</p>}
+                            {singleForm.videoId && (
+                                <div className="mt-2 rounded-lg overflow-hidden border border-ink-200 aspect-video">
+                                    <iframe
+                                        src={`https://www.youtube.com/embed/${singleForm.videoId}`}
+                                        className="w-full h-full"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        title="preview"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div>
                             <label className="block text-xs font-semibold text-ink-600 mb-1.5 flex items-center gap-1">
-                                <Clock size={12}/>
-                                Thời lượng (phút)
+                                <Clock size={12}/> Thời lượng
                             </label>
-                            <input ref={el => {
-                                refs.current['duration'] = el
-                            }} type="number" value={Math.round((singleForm.duration ?? 0) / 60)} onChange={e => {
-                                const mins = Number(e.target.value);
-                                setSingleForm({...singleForm, duration: Number.isNaN(mins) ? 0 : mins * 60});
-                                setErrors(prev => {
-                                    const next = {...prev};
-                                    delete (next as any).duration;
-                                    return next;
-                                });
-                            }}
-                                   className={`w-full border rounded-lg px-3 py-2 text-sm font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-300 ${errors.duration ? 'border-rose-300 ring-rose-100' : 'border-ink-200'}`}/>
-                            {errors.duration && <p className="text-rose-600 text-xs mt-1">{errors.duration}</p>}
+                            <div className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm font-mono text-ink-900 bg-ink-50">
+                                {singleForm.duration
+                                    ? `${Math.floor(singleForm.duration / 60)}p ${singleForm.duration % 60}s`
+                                    : <span className="text-ink-400 text-xs">Tự động từ video</span>
+                                }
+                            </div>
                         </div>
 
                         <div>
@@ -542,7 +617,8 @@ const LessonFormDialog: React.FC<Props> = ({open, onClose, onCreate, onUpdate, e
                                 <div className="space-y-3 max-h-[60vh] overflow-auto pr-2 touch-none">
                                     {items.map(item => (
                                         <SortableLesson key={item.tempId} item={item} errors={errors} refs={refs}
-                                                        updateItemField={updateItemField} deleteItem={deleteItem}/>
+                                                        updateItemField={updateItemField} deleteItem={deleteItem}
+                                                        onVideoIdChange={(tempId, id) => updateItemField(tempId, 'videoId', id)}/>
                                     ))}
                                 </div>
                             </SortableContext>

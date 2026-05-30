@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Sparkles, User, Loader2 } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, Loader2 } from "lucide-react";
 import { aiService, AiMessage } from "../services/aiService";
+import { useAuthStore } from "../stores/authStore";
 
 const SYSTEM_PROMPT =
     "Bạn là trợ lý AI cho nền tảng học lập trình EduHub. Giúp học viên hiểu bài học, trả lời câu hỏi về code, giải thích khái niệm. Trả lời ngắn gọn, thân thiện và rõ ràng. Khi cần đưa ra code mẫu, dùng markdown code block.";
 
 export default function ChatBot() {
+    const user = useAuthStore((state) => state.user);
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || user?.email || 'user')}`;
+
     const [open, setOpen] = useState(false);
     const [messages, setMessages] = useState<AiMessage[]>([
         { role: "assistant", content: "Xin chào! 👋 Tôi là trợ lý học tập AI. Bạn cần hỗ trợ gì về lập trình?" },
@@ -99,17 +103,13 @@ export default function ChatBot() {
                                 key={i}
                                 className={`flex items-end gap-2 animate-fade-in-up ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
                             >
-                                <div
-                                    className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                        msg.role === "user"
-                                            ? "bg-gradient-to-br from-primary-500 to-accent-600 shadow-soft"
-                                            : "bg-ink-100 border border-ink-200"
-                                    }`}
-                                >
+                                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                                     {msg.role === "user" ? (
-                                        <User size={13} className="text-white" />
+                                        <img src={avatarUrl} alt="you" className="w-7 h-7 rounded-lg bg-ink-100" />
                                     ) : (
-                                        <Sparkles size={13} className="text-primary-600" />
+                                        <div className="w-7 h-7 rounded-lg bg-ink-100 border border-ink-200 flex items-center justify-center">
+                                            <Sparkles size={13} className="text-primary-600" />
+                                        </div>
                                     )}
                                 </div>
                                 <div

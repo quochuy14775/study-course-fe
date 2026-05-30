@@ -4,6 +4,8 @@ import { jwtDecode } from "jwt-decode";
 interface User {
     role: string;
     exp: number;
+    email: string;
+    name: string;
 }
 
 interface AuthState {
@@ -26,13 +28,17 @@ export const useAuthStore = create<AuthState>((set) => ({
                 decoded.role ||
                 decoded.roles ||
                 decoded["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
-            console.log(role)
+            const email =
+                decoded.email ||
+                decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] ||
+                '';
+            const name =
+                decoded.name ||
+                decoded["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] ||
+                email;
             set({
                 token,
-                user: {
-                    role,
-                    exp: decoded.exp,
-                },
+                user: { role, exp: decoded.exp, email, name },
             });
         } catch {
             set({ token: null, user: null });

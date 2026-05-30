@@ -14,6 +14,7 @@ interface UserProfile {
 const Header: React.FC = () => {
     const navigate = useNavigate();
     const logout = useAuthStore((state) => state.logout);
+    const user = useAuthStore((state) => state.user);
     const toggleMobile = useUiStore((s) => s.toggleSidebarMobile);
     const mobileOpen = useUiStore((s) => s.sidebarMobileOpen);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -22,9 +23,10 @@ const Header: React.FC = () => {
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
     const userProfile: UserProfile = {
-        name: 'Alex Johnson',
-        email: 'alex.johnson@example.com',
+        name: user?.name || user?.email || 'User',
+        email: user?.email || '',
     };
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(userProfile.name)}`;
 
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
@@ -126,9 +128,7 @@ const Header: React.FC = () => {
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                                 className="flex items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-full hover:bg-ink-100 transition-colors"
                             >
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white shadow-soft">
-                                    {userProfile.name.charAt(0)}
-                                </div>
+                                <img src={avatarUrl} alt={userProfile.name} className="w-8 h-8 rounded-full ring-2 ring-white shadow-soft bg-ink-100" />
                                 <ChevronDown className={`hidden sm:block w-4 h-4 text-ink-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
 
@@ -136,9 +136,7 @@ const Header: React.FC = () => {
                                 <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-ink-200 rounded-2xl shadow-soft-lg z-50 overflow-hidden animate-fade-in-up">
                                     <div className="px-4 py-4 bg-gradient-to-br from-primary-50 to-accent-50 border-b border-ink-200">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-500 to-accent-600 flex items-center justify-center text-white font-bold shadow-glow-primary">
-                                                {userProfile.name.charAt(0)}
-                                            </div>
+                                            <img src={avatarUrl} alt={userProfile.name} className="w-11 h-11 rounded-full shadow-glow-primary bg-ink-100" />
                                             <div className="min-w-0">
                                                 <p className="font-semibold text-ink-900 truncate">{userProfile.name}</p>
                                                 <p className="text-xs text-ink-500 truncate">{userProfile.email}</p>

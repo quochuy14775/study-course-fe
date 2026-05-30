@@ -1,20 +1,21 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { showToast } from "../../../components/CustomToast";
-import { CourseRequest, Level } from "../../../types/course";
+import { CourseRequest, CourseUI, Level, LEVEL_LABEL_TO_NUMBER } from "../../../types/course";
 import CustomDropdown from "../../../components/CustomDropdown";
 import CustomCheckbox from "../../../components/CustomCheckbox";
 import { LevelOptions, StatusOptions } from "../../../types/dropdownOptions";
-import { Loader2, X, BookPlus, Image as ImageIcon, Coins, Sparkles, AlertCircle } from "lucide-react";
+import { Loader2, X, BookOpen, Image as ImageIcon, Coins, Sparkles, AlertCircle } from "lucide-react";
 
 interface Props {
     open: boolean;
+    course: CourseUI | null;
     onClose: () => void;
-    onSubmit: (data: CourseRequest) => Promise<any>;
+    onSubmit: (id: number, data: CourseRequest) => Promise<any>;
 }
 
 const formatCurrency = (value: number) => `${value.toLocaleString("en-US")} ₫`;
 
-const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
+const EditCourseDialog: React.FC<Props> = ({ open, course, onClose, onSubmit }) => {
     const [form, setForm] = useState<CourseRequest>({
         title: "",
         description: "",
@@ -32,41 +33,37 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
     const imageRef = useRef<HTMLInputElement | null>(null);
     const priceRef = useRef<HTMLInputElement | null>(null);
 
+    // Pre-fill form khi mở dialog với course data
+    useEffect(() => {
+        if (open && course) {
+            setForm({
+                title: course.title,
+                description: course.description ?? "",
+                imageUrl: course.imageUrl ?? null,
+                price: course.price,
+                level: LEVEL_LABEL_TO_NUMBER[course.level] ?? 0,
+                isFeatured: course.isFeatured,
+                isActive: course.isActive,
+            });
+            setErrors({});
+        }
+    }, [open, course]);
+
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
         if (open) window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onClose]);
 
-    useEffect(() => {
-        if (open) {
-            setForm({
-                title: "",
-                description: "",
-                imageUrl: null,
-                price: 0,
-                level: 0,
-                isFeatured: false,
-                isActive: true,
-            });
-            setErrors({});
-        }
-    }, [open]);
-
-    if (!open) return null;
+    if (!open || !course) return null;
 
     const clearError = (key: string) => {
-        setErrors((prev) => {
-            const next = { ...prev };
-            delete next[key];
-            return next;
-        });
+        setErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
     };
 
     const focusFirstError = (errs: Record<string, string>) => {
         const keys = Object.keys(errs);
         if (!keys.length) return;
-        const first = keys[0];
         setTimeout(() => {
             const map: Record<string, any> = {
                 title: titleRef.current,
@@ -74,11 +71,8 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                 imageUrl: imageRef.current,
                 price: priceRef.current,
             };
-            const el = map[first];
-            if (el?.focus) {
-                el.focus();
-                el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
+            const el = map[keys[0]];
+            if (el?.focus) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
         }, 50);
     };
 
@@ -86,7 +80,7 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
         try {
             setLoading(true);
             setErrors({});
-            await onSubmit(form);
+            await onSubmit(course.id, form);
         } catch (err: any) {
             const apiErrors = err?.response?.data?.errors;
             if (err?.response?.status === 400 && apiErrors && typeof apiErrors === "object") {
@@ -94,7 +88,7 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                 focusFirstError(apiErrors);
                 return;
             }
-            showToast.error(err?.response?.data?.message || "Tạo khóa học thất bại");
+            showToast.error(err?.response?.data?.message || "Cập nhật khóa học thất bại");
         } finally {
             setLoading(false);
         }
@@ -108,27 +102,25 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
         <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="add-course-title"
+            aria-labelledby="edit-course-title"
             className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            {/* Backdrop */}
             <div className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm" />
 
-            {/* Panel */}
             <div className="relative w-full max-w-md bg-white border border-ink-200 rounded-3xl shadow-soft-lg overflow-hidden animate-fade-in-up">
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-ink-200 bg-gradient-to-br from-primary-50/60 to-accent-50/60">
                     <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-accent-600 flex items-center justify-center shadow-glow-primary">
-                                <BookPlus className="w-5 h-5 text-white" strokeWidth={2.5} />
+                                <BookOpen className="w-5 h-5 text-white" strokeWidth={2.5} />
                             </div>
                             <div>
-                                <h2 id="add-course-title" className="text-lg font-bold text-ink-900">
-                                    Thêm khóa học mới
+                                <h2 id="edit-course-title" className="text-lg font-bold text-ink-900">
+                                    Chỉnh sửa khóa học
                                 </h2>
-                                <p className="text-xs text-ink-500 font-mono">Tạo xong sẽ vào curriculum builder</p>
+                                <p className="text-xs text-ink-500 font-mono truncate max-w-[220px]">{course.title}</p>
                             </div>
                         </div>
                         <button
@@ -206,8 +198,8 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                                 type="text"
                                 value={form.price === 0 ? "" : formatCurrency(form.price)}
                                 onChange={(e) => {
-                                    const rawValue = e.target.value.replace(/[^\d]/g, "");
-                                    setForm({ ...form, price: rawValue === "" ? 0 : Number(rawValue) });
+                                    const raw = e.target.value.replace(/[^\d]/g, "");
+                                    setForm({ ...form, price: raw === "" ? 0 : Number(raw) });
                                     clearError("price");
                                 }}
                                 placeholder="0 (Free)"
@@ -256,7 +248,7 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                         <CustomCheckbox
                             checked={form.isFeatured}
                             onChange={(checked) => setForm({ ...form, isFeatured: checked })}
-                            label={"Đánh dấu Featured"}
+                            label="Đánh dấu Featured"
                         />
                         <p className="text-[11px] text-ink-500 mt-1 ml-7 flex items-center gap-1">
                             <Sparkles size={10} className="text-amber-500" />
@@ -280,15 +272,9 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                         className="flex-[1.5] flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-600 to-accent-600 text-white text-sm font-semibold rounded-xl shadow-glow-primary hover:shadow-glow-accent active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none transition-all"
                     >
                         {loading ? (
-                            <>
-                                <Loader2 className="animate-spin" size={16} />
-                                Đang tạo...
-                            </>
+                            <><Loader2 className="animate-spin" size={16} /> Đang lưu...</>
                         ) : (
-                            <>
-                                <BookPlus size={16} />
-                                Tạo khóa học
-                            </>
+                            <><BookOpen size={16} /> Lưu thay đổi</>
                         )}
                     </button>
                 </div>
@@ -297,5 +283,5 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
     );
 };
 
-export default AddCourseDialog;
+export default EditCourseDialog;
 

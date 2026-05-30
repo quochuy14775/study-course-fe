@@ -133,6 +133,13 @@ const SortableLesson: React.FC<SortableLessonProps> = ({
                 >
                     <Pencil size={14} />
                 </button>
+                <button
+                    onClick={onDelete}
+                    className="p-2 rounded-lg text-ink-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    title="Xóa bài học"
+                >
+                    <Trash2 size={14} />
+                </button>
                 <div className="relative" ref={menuRef}>
                     <button
                         onClick={() => setMenuOpen((v) => !v)}
