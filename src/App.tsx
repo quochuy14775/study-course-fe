@@ -21,6 +21,7 @@ import './App.css';
 import { useAuthStore } from "./stores/authStore";
 import { useUiStore } from "./stores/uiStore";
 import LessonManagement from "./pages/admin/course/lesson";
+import LearnPage from "./pages/user/course/LearnPage";
 
 function ProtectedShell() {
     const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -90,6 +91,25 @@ function App() {
                 <Route path="/signup" element={<AuthPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/setup-account" element={<SetupAccountPage />} />
+
+                {/* Full-screen learn page — no Header/Sidebar */}
+                <Route
+                    path="/courses/:courseId/learn"
+                    element={
+                        <ProtectedRoute>
+                            <LearnPage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/courses/:courseId/learn/:lessonId"
+                    element={
+                        <ProtectedRoute>
+                            <LearnPage />
+                        </ProtectedRoute>
+                    }
+                />
+
                 <Route
                     path="/*"
                     element={
