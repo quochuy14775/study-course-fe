@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, FileText, Settings, ChevronLeft, Sparkles, X } from 'lucide-react';
+import { Home, BookOpen, FileText, Settings, ChevronLeft, Sparkles, X, LayoutGrid } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from "../stores/authStore";
 import { useUiStore } from "../stores/uiStore";
@@ -17,6 +17,7 @@ const Sidebar: React.FC = () => {
         { icon: BookOpen, label: 'Lộ trình', path: '/roadmap', roles: ['User'] },
         { icon: FileText, label: 'Bài viết', path: '/articles', roles: ['User'] },
         { icon: Settings, label: 'Quản lý khóa học', path: '/management', roles: ['Admin'] },
+        { icon: LayoutGrid, label: 'Quản lý kỹ năng', path: '/management/skills', roles: ['Admin'] },
     ];
 
     const filteredMenu = menuItems.filter(item =>

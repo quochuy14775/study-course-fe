@@ -1,4 +1,5 @@
 import { Lesson } from "./lesson";
+import { CourseSkill, CourseSkillRequest } from "./skill";
 
 // ────────────────────────────────────────────────────────────
 // Course level — BE enum CourseLevel { Beginner=0, Intermediate=1, Advanced=2 }
@@ -48,6 +49,7 @@ export interface Course {
     isActive: boolean;
     createdBy?: string | null;
     updatedBy?: string | null;
+    courseSkills?: CourseSkill[];
 }
 
 /** Returned by GET /Courses/{id} — has extra tagIds */
@@ -90,6 +92,7 @@ export interface CourseRequest {
     isFeatured: boolean;
     isActive: boolean;
     tagIds?: number[];
+    skills?: CourseSkillRequest[];
 }
 
 // ────────────────────────────────────────────────────────────

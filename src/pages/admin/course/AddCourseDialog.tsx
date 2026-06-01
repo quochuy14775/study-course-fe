@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { showToast } from "../../../components/CustomToast";
 import { CourseRequest, Level } from "../../../types/course";
+import { Skill, SkillListResponse } from "../../../types/skill";
+import courseService from "../../../services/courseServices";
 import CustomDropdown from "../../../components/CustomDropdown";
 import CustomCheckbox from "../../../components/CustomCheckbox";
 import { LevelOptions, StatusOptions } from "../../../types/dropdownOptions";
@@ -23,7 +25,10 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
         level: 0,
         isFeatured: false,
         isActive: true,
+        skills: []
     });
+    const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
+    const [skillSearch, setSkillSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -48,8 +53,11 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                 level: 0,
                 isFeatured: false,
                 isActive: true,
+                skills: []
             });
             setErrors({});
+            // Load available skills
+            courseService.getSkills().then((res: SkillListResponse) => setAvailableSkills(res.value));
         }
     }, [open]);
 
@@ -103,6 +111,24 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
     const inputBase = "w-full bg-white text-ink-900 placeholder:text-ink-400 border rounded-xl px-3 py-2.5 text-sm transition-all outline-none";
     const inputValid = "border-ink-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/15";
     const inputError = "border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-300/20";
+
+    const handleSkillToggle = (skillId: number) => {
+        setForm(prev => {
+            const exists = prev.skills?.find(s => s.skillId === skillId);
+            if (exists) {
+                return { ...prev, skills: prev.skills?.filter(s => s.skillId !== skillId) };
+            } else {
+                return { ...prev, skills: [...(prev.skills || []), { skillId, contributionPercentage: 10 }] };
+            }
+        });
+    };
+
+    const handleWeightChange = (skillId: number, weight: number) => {
+        setForm(prev => ({
+            ...prev,
+            skills: prev.skills?.map(s => s.skillId === skillId ? { ...s, contributionPercentage: weight } : s)
+        }));
+    };
 
     return (
         <div
@@ -262,6 +288,107 @@ const AddCourseDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
                             <Sparkles size={10} className="text-amber-500" />
                             Khóa học sẽ được hiển thị nổi bật trên trang chủ
                         </p>
+                    </div>
+
+                    {/* SKILLS */}
+                    <div className="pt-2">
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-semibold text-ink-700 uppercase tracking-wide">
+                                Kỹ năng cung cấp
+                            </label>
+                            {(form.skills?.length ?? 0) > 0 && (() => {
+                                const total = form.skills?.reduce((sum, s) => sum + s.contributionPercentage, 0) ?? 0;
+                                const isOver = total > 100;
+                                return (
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isOver ? 'bg-rose-100 text-rose-600' : total === 100 ? 'bg-emerald-100 text-emerald-600' : 'bg-primary-100 text-primary-600'}`}>
+                                        Tổng: {total}%
+                                    </span>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Search skills */}
+                        {availableSkills.length > 5 && (
+                            <div className="mb-2">
+                                <input
+                                    type="text"
+                                    placeholder="Tìm kỹ năng..."
+                                    value={skillSearch}
+                                    onChange={(e) => setSkillSearch(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs bg-white border border-ink-200 rounded-lg outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-300/30 transition-all"
+                                />
+                            </div>
+                        )}
+
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
+                            {availableSkills
+                                .filter(s => s.name.toLowerCase().includes(skillSearch.toLowerCase()))
+                                .map(skill => {
+                                    const skillConfig = form.skills?.find(s => s.skillId === skill.id);
+                                    const isSelected = !!skillConfig;
+                                    return (
+                                        <div
+                                            key={skill.id}
+                                            onClick={() => handleSkillToggle(skill.id)}
+                                            className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                                                isSelected
+                                                    ? 'bg-primary-50 border-primary-300 shadow-sm'
+                                                    : 'bg-white border-ink-100 hover:border-ink-300 hover:bg-ink-50'
+                                            }`}
+                                        >
+                                            {/* Icon */}
+                                            <div className={`w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center overflow-hidden border ${isSelected ? 'border-primary-200 bg-white' : 'border-ink-100 bg-ink-50'}`}>
+                                                {skill.iconUrl
+                                                    ? <img src={skill.iconUrl} alt={skill.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                                                    : <span className="text-[10px] font-black text-ink-400">{skill.name.slice(0,2).toUpperCase()}</span>
+                                                }
+                                            </div>
+
+                                            {/* Name */}
+                                            <span className={`text-sm font-semibold flex-1 truncate ${isSelected ? 'text-primary-700' : 'text-ink-700'}`}>
+                                                {skill.name}
+                                            </span>
+
+                                            {/* Checkbox indicator */}
+                                            <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-colors ${isSelected ? 'bg-primary-600 border-primary-600' : 'border-ink-300 bg-white'}`}>
+                                                {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 10"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                            </div>
+
+                                            {/* Percentage stepper */}
+                                            {isSelected && (
+                                                <div
+                                                    className="flex items-center gap-1 ml-1"
+                                                    onClick={e => e.stopPropagation()}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleWeightChange(skill.id, Math.max(1, (skillConfig?.contributionPercentage ?? 10) - 5))}
+                                                        className="w-5 h-5 rounded-md bg-primary-100 hover:bg-primary-200 text-primary-700 flex items-center justify-center font-bold text-xs transition-colors"
+                                                    >−</button>
+                                                    <span className="w-8 text-center text-xs font-bold text-primary-700">
+                                                        {skillConfig?.contributionPercentage}%
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleWeightChange(skill.id, Math.min(100, (skillConfig?.contributionPercentage ?? 10) + 5))}
+                                                        className="w-5 h-5 rounded-md bg-primary-100 hover:bg-primary-200 text-primary-700 flex items-center justify-center font-bold text-xs transition-colors"
+                                                    >+</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            {availableSkills.length === 0 && (
+                                <div className="text-center py-6 border border-dashed border-ink-200 rounded-xl">
+                                    <p className="text-xs text-ink-400">Chưa có kỹ năng nào. Hãy tạo kỹ năng trước.</p>
+                                </div>
+                            )}
+                            {availableSkills.length > 0 && availableSkills.filter(s => s.name.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
+                                <div className="text-center py-6 border border-dashed border-ink-200 rounded-xl">
+                                    <p className="text-xs text-ink-400">Không tìm thấy kỹ năng nào phù hợp</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

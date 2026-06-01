@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="mainGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Left icon circle -->
+  <circle cx="60" cy="120" r="50" fill="url(#mainGrad3)" opacity="0.15" stroke="url(#mainGrad3)" stroke-width="1.5"/>
+  <circle cx="60" cy="120" r="48" fill="url(#mainGrad3)" filter="url(#glow)"/>
+
+  <!-- Light reflection on left circle -->
+  <circle cx="35" cy="95" r="18" fill="white" opacity="0.2"/>
+
+  <!-- Graduation cap on left -->
+  <g transform="translate(35, 100)">
+    <!-- Mortarboard -->
+    <polygon points="25,0 50,15 25,22 0,15" fill="white" opacity="0.95"/>
+    <!-- Cap front shadow -->
+    <polygon points="25,22 50,15 50,18 25,25" fill="#c4b5fd" opacity="0.4"/>
+    <!-- Tassel string -->
+    <line x1="0" y1="15" x2="-8" y2="35" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Tassel ball -->
+    <circle cx="-8" cy="40" r="3.5" fill="white" opacity="0.9"/>
+  </g>
+
+  <!-- Right icon circle (larger) -->
+  <circle cx="180" cy="120" r="55" fill="url(#mainGrad3)"/>
+
+  <!-- Light reflection on right circle -->
+  <circle cx="145" cy="80" r="22" fill="white" opacity="0.18"/>
+
+  <!-- Open book on right -->
+  <g transform="translate(150, 105)">
+    <!-- Left page -->
+    <path d="M 0 5 L 0 50 Q 4 54 12 54 L 12 5 Z" fill="white" opacity="0.95"/>
+    <!-- Right page -->
+    <path d="M 13 5 L 13 54 Q 21 54 25 50 L 25 5 Z" fill="white" opacity="0.92"/>
+    <!-- Book binding/spine -->
+    <rect x="10" y="5" width="3" height="49" fill="#a5b4fc" opacity="0.5"/>
+    <!-- Content lines on left -->
+    <line x1="4" y1="16" x2="10" y2="16" stroke="#ddd6fe" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="4" y1="24" x2="10" y2="24" stroke="#ddd6fe" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="4" y1="32" x2="10" y2="32" stroke="#ddd6fe" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Content lines on right -->
+    <line x1="15" y1="16" x2="21" y2="16" stroke="#ddd6fe" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="15" y1="24" x2="21" y2="24" stroke="#ddd6fe" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="15" y1="32" x2="21" y2="32" stroke="#ddd6fe" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Bookmark ribbon -->
+    <rect x="19" y="3" width="3" height="30" rx="1.5" fill="#fbbf24" opacity="0.85"/>
+  </g>
+
+  <!-- Center text "EduHub" -->
+  <text x="120" y="195" font-size="20" font-weight="700" font-family="Arial, sans-serif" text-anchor="middle" fill="#6366f1">
+    EduHub
+  </text>
+</svg>

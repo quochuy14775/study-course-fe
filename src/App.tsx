@@ -11,6 +11,7 @@ import AuthPage from './components/AuthPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SetupAccountPage from './pages/SetupAccountPage';
 import CourseManagement from "./pages/admin/course";
+import SkillManagement from "./pages/admin/skill";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -54,6 +55,14 @@ function ProtectedShell() {
                             element={
                                 <ProtectedRoute allowedRoles={["Admin"]}>
                                     <CourseManagement />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/management/skills"
+                            element={
+                                <ProtectedRoute allowedRoles={["Admin"]}>
+                                    <SkillManagement />
                                 </ProtectedRoute>
                             }
                         />
