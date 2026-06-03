@@ -1,5 +1,6 @@
 import React from 'react';
 import { toast, ToastOptions, cssTransition } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -8,9 +9,7 @@ interface ToastConfig {
     icon: React.ReactNode;
     gradient: string;
     bar: string;
-    iconBg: string;
     iconColor: string;
-    glow: string;
     title: string;
     autoClose: number;
 }
@@ -20,9 +19,7 @@ const CONFIG: Record<ToastType, ToastConfig> = {
         icon: <CheckCircle2 size={16} strokeWidth={2.5} />,
         gradient: 'from-code-500/10 via-transparent',
         bar: 'from-code-400 via-code-500 to-code-600',
-        iconBg: '',
         iconColor: 'text-code-500',
-        glow: '',
         title: 'Thành công',
         autoClose: 3000,
     },
@@ -30,9 +27,7 @@ const CONFIG: Record<ToastType, ToastConfig> = {
         icon: <XCircle size={16} strokeWidth={2.5} />,
         gradient: 'from-rose-500/10 via-transparent',
         bar: 'from-rose-400 via-rose-500 to-rose-600',
-        iconBg: '',
         iconColor: 'text-rose-500',
-        glow: '',
         title: 'Lỗi',
         autoClose: 4000,
     },
@@ -40,9 +35,7 @@ const CONFIG: Record<ToastType, ToastConfig> = {
         icon: <AlertTriangle size={16} strokeWidth={2.5} />,
         gradient: 'from-amber-500/10 via-transparent',
         bar: 'from-amber-400 via-amber-500 to-amber-600',
-        iconBg: '',
         iconColor: 'text-amber-500',
-        glow: '',
         title: 'Cảnh báo',
         autoClose: 3500,
     },
@@ -50,9 +43,7 @@ const CONFIG: Record<ToastType, ToastConfig> = {
         icon: <Info size={16} strokeWidth={2.5} />,
         gradient: 'from-primary-500/10 via-transparent',
         bar: 'from-primary-400 via-accent-500 to-accent-600',
-        iconBg: '',
         iconColor: 'text-primary-500',
-        glow: '',
         title: 'Thông báo',
         autoClose: 3000,
     },
@@ -85,7 +76,7 @@ const CustomToastContent: React.FC<Props> = ({ type, message, toastId }) => {
             </div>
 
             {/* Text */}
-            <div className="toast-text-in flex-1 min-w-0 relative z-10">
+            <div className="toast-text-in flex-1 min-w-0 pt-1 relative z-10">
                 <p className="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-0.5 font-mono">
                     {cfg.title}
                 </p>
@@ -111,6 +102,7 @@ const CustomToastContent: React.FC<Props> = ({ type, message, toastId }) => {
     );
 };
 
+
 const ToastTransition = cssTransition({
     enter: 'toast-anim-enter',
     exit: 'toast-anim-exit',
@@ -125,24 +117,15 @@ const baseOptions: ToastOptions = {
         'relative flex items-start bg-white/95 backdrop-blur-sm border border-ink-200/80 rounded-2xl shadow-soft-lg px-3 py-3 mb-2 overflow-hidden',
 };
 
+const make = (type: ToastType) =>
+    (message: string, options?: ToastOptions) =>
+        toast(({ toastProps }) => (
+            <CustomToastContent type={type} message={message} toastId={toastProps.toastId} />
+        ), { ...baseOptions, autoClose: CONFIG[type].autoClose, ...options });
+
 export const showToast = {
-    success: (message: string, options?: ToastOptions) =>
-        toast(({ toastProps }) => (
-            <CustomToastContent type="success" message={message} toastId={toastProps.toastId} />
-        ), { ...baseOptions, autoClose: CONFIG.success.autoClose, ...options }),
-
-    error: (message: string, options?: ToastOptions) =>
-        toast(({ toastProps }) => (
-            <CustomToastContent type="error" message={message} toastId={toastProps.toastId} />
-        ), { ...baseOptions, autoClose: CONFIG.error.autoClose, ...options }),
-
-    warning: (message: string, options?: ToastOptions) =>
-        toast(({ toastProps }) => (
-            <CustomToastContent type="warning" message={message} toastId={toastProps.toastId} />
-        ), { ...baseOptions, autoClose: CONFIG.warning.autoClose, ...options }),
-
-    info: (message: string, options?: ToastOptions) =>
-        toast(({ toastProps }) => (
-            <CustomToastContent type="info" message={message} toastId={toastProps.toastId} />
-        ), { ...baseOptions, autoClose: CONFIG.info.autoClose, ...options }),
+    success: make('success'),
+    error:   make('error'),
+    warning: make('warning'),
+    info:    make('info'),
 };

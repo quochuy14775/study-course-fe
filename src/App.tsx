@@ -24,6 +24,7 @@ import { useAuthStore } from "./stores/authStore";
 import { useUiStore } from "./stores/uiStore";
 import LessonManagement from "./pages/admin/course/lesson";
 import LearnPage from "./pages/user/course/LearnPage";
+import MyCoursesPage from "./pages/user/course/MyCoursesPage";
 
 function ProtectedShell() {
     const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -49,6 +50,7 @@ function ProtectedShell() {
                         <Route path="/roadmap" element={<RoadmapPage />} />
                         <Route path="/articles" element={<ArticlesPage />} />
                         <Route path="/personal" element={<PersonalPage />} />
+                        <Route path="/my-courses" element={<MyCoursesPage />} />
 
                         {/* Admin only */}
                         <Route
@@ -103,7 +105,12 @@ function App() {
 
     return (
         <Router>
-            <ToastContainer position="top-right" autoClose={3000} />
+            <ToastContainer
+                position="top-right"
+                closeButton={false}
+                hideProgressBar
+                style={{ padding: '16px 16px 0 0', width: 400 }}
+            />
             <Routes>
                 <Route path="/login" element={<AuthPage />} />
                 <Route path="/signup" element={<AuthPage />} />

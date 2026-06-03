@@ -1,33 +1,33 @@
-import React from 'react';
-import { Pencil, BookOpen, Sparkles, Target, Clock, TrendingUp, PlayCircle, ChevronRight } from 'lucide-react';
-import { COURSES, FRAMEWORKS, LANGUAGES, ROADMAP_STEPS } from "../mockDatas/mockRoadMap";
-import { useCourseRecommendation } from "../hooks/useCourseRecommendation";
-import RoadmapStepCard from "../components/RoadMapStepCard";
-import CourseRecommendationModal from "../components/CourseRecommendationModal";
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pencil, Sparkles, Target, TrendingUp, PlayCircle } from 'lucide-react';
+import RoadmapCreator from './RoadmapCreator';
+import RoadmapStepCard from '../components/RoadMapStepCard';
+import roadmapService from '../services/roadmapService';
+import type { Roadmap, RoadmapCourse } from '../types/roadmap';
+import type { RoadmapStep } from '../types/roadmap';
 
-// ---------------------------------------------------------------------------
-// Active Roadmap Dashboard — shown when user has saved a roadmap
-// ---------------------------------------------------------------------------
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+const toStep = (course: RoadmapCourse, index: number): RoadmapStep => ({
+    id: index + 1,
+    title: `Bước ${index + 1}: ${course.title}`,
+    description: course.description ?? '',
+    topics: course.chapters.map((ch) => ch.title),
+    difficulty: (course.level as RoadmapStep['difficulty']) ?? 'Beginner',
+});
+
+// ─── Active Roadmap Dashboard ─────────────────────────────────────────────────
 
 interface ActiveRoadmapDashboardProps {
-    langId: string;
-    frameworkId: string;
-    selectedCourseIds: string[];
+    roadmap: Roadmap;
     onEdit: () => void;
 }
 
-const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({
-    langId,
-    frameworkId,
-    selectedCourseIds,
-    onEdit,
-}) => {
-    const langLabel = LANGUAGES.find((l) => l.id === langId)?.label ?? langId;
-    const fwLabel = (FRAMEWORKS[langId] ?? []).find((f) => f.id === frameworkId)?.label ?? frameworkId;
-    const courses = COURSES.filter((c) => selectedCourseIds.includes(c.id));
-    // Mock progress — replace when real data available
+const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({ roadmap, onEdit }) => {
     const completedCount = 0;
-    const progressPct = courses.length > 0 ? Math.round((completedCount / courses.length) * 100) : 0;
+    const progressPct = roadmap.courseCount > 0
+        ? Math.round((completedCount / roadmap.courseCount) * 100)
+        : 0;
 
     return (
         <div className="mb-10 animate-fade-in-up">
@@ -42,13 +42,12 @@ const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({
                             <Sparkles className="w-3 h-3" />
                             <span>Lộ trình đang theo</span>
                         </div>
-                        <h2 className="text-3xl font-extrabold mb-2">
-                            <span className="font-mono">{langLabel}</span>
-                            <span className="text-white/60 mx-2">·</span>
-                            <span className="font-mono">{fwLabel}</span>
+                        <h2 className="text-3xl font-extrabold mb-1 leading-tight">
+                            Hành trình trở thành<br />
+                            <span className="text-accent-300">Developer chuyên nghiệp</span>
                         </h2>
-                        <p className="text-white/80">
-                            {courses.length} khóa học · {completedCount}/{courses.length} hoàn thành
+                        <p className="text-white/70 text-sm font-mono mt-2 mb-3">
+                            {roadmap.courseCount} khóa học &nbsp;·&nbsp; {roadmap.courses.reduce((s, c) => s + c.chapterCount, 0)} chương &nbsp;·&nbsp; {completedCount}/{roadmap.courseCount} hoàn thành
                         </p>
 
                         {/* Progress bar */}
@@ -67,9 +66,7 @@ const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3">
-                        <button
-                            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white text-primary-700 font-semibold rounded-xl shadow-soft-lg hover:scale-105 active:scale-95 transition-transform"
-                        >
+                        <button className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white text-primary-700 font-semibold rounded-xl shadow-soft-lg hover:scale-105 active:scale-95 transition-transform">
                             <PlayCircle className="w-5 h-5" />
                             Tiếp tục học
                         </button>
@@ -84,61 +81,35 @@ const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({
                 </div>
             </div>
 
-            {/* Courses in roadmap */}
-            {courses.length > 0 && (
-                <div className="mt-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-ink-900">Khóa học trong lộ trình</h3>
-                        <span className="text-xs text-ink-500 font-mono">{courses.length} courses</span>
+            {/* Step-by-step roadmap — Courses as steps, Chapters as topics */}
+            {roadmap.courses.length > 0 && (
+                <div className="mt-8">
+                    <div className="flex items-center justify-between mb-5">
+                        <h3 className="text-xl font-bold text-ink-900">Lộ trình từng bước</h3>
+                        <span className="text-xs text-ink-500 font-mono">{roadmap.courseCount} khóa học</span>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        {courses.map((course, i) => (
-                            <button
-                                key={course.id}
-                                className="card-lift text-left flex items-start gap-3 p-4 bg-white border border-ink-200 rounded-2xl shadow-soft group animate-fade-in-up"
-                                style={{ animationDelay: `${i * 60}ms`, animationFillMode: 'backwards' }}
-                            >
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-50 to-accent-50 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                                    <BookOpen className="w-5 h-5 text-primary-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-ink-900 group-hover:text-primary-700 transition-colors truncate">
-                                        {course.title}
-                                    </p>
-                                    <p className="text-xs text-ink-500 mt-1 line-clamp-2">{course.description}</p>
-                                    <div className="flex items-center gap-3 mt-2 text-xs text-ink-500">
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="w-3 h-3" /> {course.duration}
-                                        </span>
-                                        <span className="px-1.5 py-0.5 rounded bg-ink-100 text-ink-600 font-mono text-[10px]">
-                                            {course.level}
-                                        </span>
-                                    </div>
-                                </div>
-                                <ChevronRight className="w-4 h-4 text-ink-400 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-1" />
-                            </button>
-                        ))}
-                    </div>
+
+                    {roadmap.courses.map((course, i) => (
+                        <RoadmapStepCard
+                            key={course.id}
+                            step={toStep(course, i)}
+                            isLast={i === roadmap.courses.length - 1}
+                            onStartLearning={() => {}}
+                        />
+                    ))}
                 </div>
             )}
         </div>
     );
 };
 
-// ---------------------------------------------------------------------------
-// Empty state — user has no roadmap yet
-// ---------------------------------------------------------------------------
+// ─── Empty state ───────────────────────────────────────────────────────────────
 
-interface EmptyHeroProps {
-    onCreate: () => void;
-}
-
-const EmptyHero: React.FC<EmptyHeroProps> = ({ onCreate }) => (
+const EmptyHero: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
     <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-accent-700 p-8 lg:p-10 text-white shadow-soft-lg mb-10 animate-fade-in-up">
         <div className="absolute -top-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 -left-10 w-96 h-96 bg-accent-400/20 rounded-full blur-3xl" />
 
-        {/* Code-style decorator */}
         <div className="absolute top-6 right-8 font-mono text-xs text-white/30 hidden lg:block">
             <span className="text-white/20">$</span> roadmap --init
         </div>
@@ -164,50 +135,47 @@ const EmptyHero: React.FC<EmptyHeroProps> = ({ onCreate }) => (
             </button>
 
             <div className="flex flex-wrap gap-6 mt-8 text-sm">
-                <div className="flex items-center gap-2 text-white/90">
-                    <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-sm flex items-center justify-center">
-                        <Target className="w-4 h-4" />
+                {[
+                    { icon: Target, label: 'Mục tiêu rõ ràng' },
+                    { icon: TrendingUp, label: 'Theo dõi tiến độ' },
+                    { icon: Sparkles, label: 'Gợi ý AI' },
+                ].map(({ icon: Icon, label }) => (
+                    <div key={label} className="flex items-center gap-2 text-white/90">
+                        <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-sm flex items-center justify-center">
+                            <Icon className="w-4 h-4" />
+                        </div>
+                        <span>{label}</span>
                     </div>
-                    <span>Mục tiêu rõ ràng</span>
-                </div>
-                <div className="flex items-center gap-2 text-white/90">
-                    <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-sm flex items-center justify-center">
-                        <TrendingUp className="w-4 h-4" />
-                    </div>
-                    <span>Theo dõi tiến độ</span>
-                </div>
-                <div className="flex items-center gap-2 text-white/90">
-                    <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-sm flex items-center justify-center">
-                        <Sparkles className="w-4 h-4" />
-                    </div>
-                    <span>Gợi ý AI</span>
-                </div>
+                ))}
             </div>
         </div>
     </div>
 );
 
-// ---------------------------------------------------------------------------
-// RoadmapPage
-// ---------------------------------------------------------------------------
+// ─── RoadmapPage ──────────────────────────────────────────────────────────────
 
 const RoadmapPage: React.FC = () => {
-    const {
-        isModalOpen,
-        currentStep,
-        selectedLangId,
-        selectedFrameworkId,
-        selectedCourseIds,
-        savedRoadmap,
-        openModal,
-        closeModal,
-        setLanguage,
-        setFramework,
-        toggleCourse,
-        goNextStep,
-        goPrevStep,
-        handleAccept,
-    } = useCourseRecommendation();
+    const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [creatorOpen, setCreatorOpen] = useState(false);
+
+    const fetchRoadmap = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await roadmapService.getRoadmaps({ count: true, top: 1 });
+            setRoadmap(res.value?.[0] ?? null);
+        } catch {
+            setRoadmap(null);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchRoadmap(); }, [fetchRoadmap]);
+
+    const handleCreated = (newRoadmap: Roadmap) => {
+        setRoadmap(newRoadmap);
+    };
 
     return (
         <main className="min-h-screen bg-ink-50 relative">
@@ -225,63 +193,30 @@ const RoadmapPage: React.FC = () => {
                         Lộ trình học tập
                     </h1>
                     <p className="text-lg text-ink-600">
-                        {savedRoadmap
+                        {roadmap
                             ? 'Theo dõi và tiếp tục hành trình trở thành developer chuyên nghiệp'
                             : 'Tạo lộ trình cá nhân và bắt đầu hành trình của bạn'}
                     </p>
                 </section>
 
-                {/* Active dashboard OR empty hero */}
-                {savedRoadmap ? (
+                {loading ? (
+                    <div className="flex justify-center py-20">
+                        <div className="w-8 h-8 rounded-full border-2 border-primary-500 border-t-transparent animate-spin" />
+                    </div>
+                ) : roadmap ? (
                     <ActiveRoadmapDashboard
-                        langId={savedRoadmap.langId}
-                        frameworkId={savedRoadmap.frameworkId}
-                        selectedCourseIds={savedRoadmap.selectedCourseIds}
-                        onEdit={() => openModal()}
+                        roadmap={roadmap}
+                        onEdit={() => setCreatorOpen(true)}
                     />
                 ) : (
-                    <EmptyHero onCreate={() => openModal()} />
+                    <EmptyHero onCreate={() => setCreatorOpen(true)} />
                 )}
-
-                {/* Roadmap timeline section */}
-                <section className="animate-fade-in-up" style={{ animationDelay: '150ms', animationFillMode: 'backwards' }}>
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-2xl font-bold text-ink-900">Các giai đoạn phát triển</h2>
-                            <p className="text-sm text-ink-500 mt-1">Tham khảo lộ trình chung từ Beginner đến Expert</p>
-                        </div>
-                        <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-ink-200 text-xs font-mono text-ink-600">
-                            {ROADMAP_STEPS.length} stages
-                        </span>
-                    </div>
-
-                    <div>
-                        {ROADMAP_STEPS.map((step, index) => (
-                            <RoadmapStepCard
-                                key={step.id}
-                                step={step}
-                                isLast={index === ROADMAP_STEPS.length - 1}
-                                onStartLearning={openModal}
-                            />
-                        ))}
-                    </div>
-                </section>
             </div>
 
-            {/* Modal */}
-            <CourseRecommendationModal
-                isOpen={isModalOpen}
-                currentStep={currentStep}
-                selectedLangId={selectedLangId}
-                selectedFrameworkId={selectedFrameworkId}
-                selectedCourseIds={selectedCourseIds}
-                onClose={closeModal}
-                onSetLanguage={setLanguage}
-                onSetFramework={setFramework}
-                onToggleCourse={toggleCourse}
-                onNext={goNextStep}
-                onPrev={goPrevStep}
-                onAccept={handleAccept}
+            <RoadmapCreator
+                isOpen={creatorOpen}
+                onClose={() => setCreatorOpen(false)}
+                onCreated={handleCreated}
             />
         </main>
     );

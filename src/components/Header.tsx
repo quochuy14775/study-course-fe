@@ -146,7 +146,7 @@ const Header: React.FC = () => {
 
                                     <nav className="py-2">
                                         <MenuItem icon={<User className="w-4 h-4" />} label="Trang cá nhân" onClick={() => { navigate('/personal'); setIsDropdownOpen(false); }} />
-                                        <MenuItem icon={<BookOpen className="w-4 h-4" />} label="Khóa học của tôi" onClick={() => setIsDropdownOpen(false)} />
+                                        <MenuItem icon={<BookOpen className="w-4 h-4" />} label="Khóa học của tôi" onClick={() => { navigate('/my-courses'); setIsDropdownOpen(false); }} />
                                         <MenuItem icon={<Bookmark className="w-4 h-4" />} label="Đã lưu" onClick={() => setIsDropdownOpen(false)} />
                                         <MenuItem icon={<Settings className="w-4 h-4" />} label="Cài đặt" onClick={() => setIsDropdownOpen(false)} />
                                     </nav>

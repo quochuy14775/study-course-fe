@@ -130,60 +130,65 @@ button:disabled,
   animation: shimmer 2s linear infinite;
 }
 
-/* ── Toast animations ─────────────────────────────────────── */
-@keyframes toast-slide-in {
-  0%   { opacity: 0; transform: translateX(calc(100% + 24px)) scale(0.88); filter: blur(6px); }
-  55%  { opacity: 1; transform: translateX(-10px) scale(1.02); filter: blur(0); }
-  75%  { transform: translateX(3px) scale(0.99); }
+/* ── Toast ─────────────────────────────────────────────────── */
+
+/* Strip Toastify wrapper chrome */
+.Toastify__toast-container { padding: 0 !important; }
+.Toastify__toast-body { padding: 0 !important; margin: 0 !important; }
+
+/* Enter — slide down from top-right */
+@keyframes toast-enter-kf {
+  0%   { opacity: 0; transform: translateX(24px) scale(0.96); filter: blur(2px); }
+  60%  { opacity: 1; transform: translateX(-4px) scale(1.005); filter: blur(0); }
   100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
 }
-
-@keyframes toast-slide-out {
-  0%   { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
-  15%  { transform: translateX(-8px) scale(1.01); }
-  100% { opacity: 0; transform: translateX(calc(100% + 24px)) scale(0.9); filter: blur(4px); }
+/* Exit — slide right + fade */
+@keyframes toast-exit-kf {
+  0%   { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateX(20px) scale(0.96); }
 }
 
-@keyframes toast-progress {
-  from { transform: scaleX(1); }
-  to   { transform: scaleX(0); }
-}
+.toast-anim-enter { animation: toast-enter-kf 0.38s cubic-bezier(0.22,1,0.36,1) forwards; }
+.toast-anim-exit  { animation: toast-exit-kf 0.22s cubic-bezier(0.55,0,1,0.8) forwards; }
 
-@keyframes icon-pop {
-  0%   { transform: scale(0.2) rotate(-20deg); opacity: 0; }
-  45%  { transform: scale(1.3) rotate(6deg); opacity: 1; }
-  70%  { transform: scale(0.92) rotate(-3deg); }
-  88%  { transform: scale(1.05) rotate(1deg); }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@keyframes bar-slide {
+/* Left accent bar slide in */
+@keyframes toast-bar-slide-kf {
   0%   { transform: scaleY(0); opacity: 0; }
-  60%  { transform: scaleY(1.08); opacity: 1; }
   100% { transform: scaleY(1); opacity: 1; }
 }
-
-@keyframes toast-shimmer-sweep {
-  0%   { transform: translateX(-100%) skewX(-12deg); opacity: 0; }
-  20%  { opacity: 0.6; }
-  80%  { opacity: 0.4; }
-  100% { transform: translateX(400%) skewX(-12deg); opacity: 0; }
+.toast-bar-slide {
+  animation: toast-bar-slide-kf 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.05s both;
+  transform-origin: center;
 }
 
-@keyframes toast-text-in {
-  0%   { opacity: 0; transform: translateY(6px); }
+/* Icon pop */
+@keyframes toast-icon-pop-kf {
+  0%   { transform: scale(0.4) rotate(-10deg); opacity: 0; }
+  55%  { transform: scale(1.25) rotate(4deg); opacity: 1; }
+  80%  { transform: scale(0.92) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.toast-icon-pop { animation: toast-icon-pop-kf 0.42s cubic-bezier(0.34,1.56,0.64,1) 0.08s both; }
+
+/* Text slide in */
+@keyframes toast-text-in-kf {
+  0%   { opacity: 0; transform: translateY(5px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+.toast-text-in { animation: toast-text-in-kf 0.3s ease-out 0.12s both; }
 
-/* Wrapper-level enter/exit — wired via cssTransition */
-.toast-anim-enter { animation: toast-slide-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-.toast-anim-exit  { animation: toast-slide-out 0.35s cubic-bezier(0.55, 0, 1, 0.8) forwards; }
+/* Shimmer sweep */
+@keyframes toast-shimmer-kf {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(400%); }
+}
+.toast-shimmer { animation: toast-shimmer-kf 0.7s ease-out 0.05s both; }
 
-/* Inner element animations */
-.toast-icon-pop   { animation: icon-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s both; }
-.toast-bar-slide  { animation: bar-slide 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s both; transform-origin: top; }
-.toast-text-in    { animation: toast-text-in 0.35s ease-out 0.2s both; }
-.toast-shimmer    { animation: toast-shimmer-sweep 0.9s ease-out 0.08s both; }
+/* Progress shrink */
+@keyframes toast-progress {
+  0%   { transform: scaleX(1); }
+  100% { transform: scaleX(0); }
+}
 
 /* Card hover lift */
 .card-lift {
