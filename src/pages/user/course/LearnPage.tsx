@@ -11,10 +11,12 @@ import { toast } from 'react-toastify';
 import NotePanel from './NotePanel';
 import courseService from '../../../services/courseServices';
 import lessonService from '../../../services/lessonService';
+import chapterService from '../../../services/chapterService';
 import lessonInteractionService from '../../../services/lessonInteractionService';
 import { useAuthStore } from '../../../stores/authStore';
 import { Course, formatDurationSeconds } from '../../../types/course';
 import { Lesson } from '../../../types/lesson';
+import type { Chapter } from '../../../types/chapter';
 import type { Note, Comment, Question } from '../../../types/lessonInteraction';
 
 interface ChapterGroup { chapterId: number | null; title: string; lessons: Lesson[] }
@@ -29,19 +31,30 @@ interface YouTubePlayerHandle {
 // ─────────────────────────────────────────────────────────────
 interface ChapterGroup { chapterId: number | null; title: string; lessons: Lesson[] }
 
-function groupByChapter(lessons: Lesson[]): ChapterGroup[] {
+function groupByChapter(lessons: Lesson[], chapters: Chapter[]): ChapterGroup[] {
+    const chapterMap = new Map(chapters.map((c) => [c.id, c]));
     const map: Record<string, Lesson[]> = {};
     for (const l of lessons) {
         const key = String(l.chapterId ?? 'null');
         if (!map[key]) map[key] = [];
         map[key].push(l);
     }
-    let idx = 1;
-    return Object.keys(map).map((key) => ({
-        chapterId: key === 'null' ? null : Number(key),
-        title: key === 'null' ? 'Bài học' : `Chương ${idx++}`,
-        lessons: map[key].slice().sort((a: Lesson, b: Lesson) => a.orderIndex - b.orderIndex),
-    }));
+    // Sort by chapter orderIndex, null-chapter last
+    const sortedKeys = Object.keys(map).sort((a, b) => {
+        if (a === 'null') return 1;
+        if (b === 'null') return -1;
+        const orderA = chapterMap.get(Number(a))?.orderIndex ?? 0;
+        const orderB = chapterMap.get(Number(b))?.orderIndex ?? 0;
+        return orderA - orderB;
+    });
+    return sortedKeys.map((key) => {
+        const chapter = key !== 'null' ? chapterMap.get(Number(key)) : undefined;
+        return {
+            chapterId: key === 'null' ? null : Number(key),
+            title: chapter?.title ?? (key === 'null' ? 'Bài học' : `Chương ${key}`),
+            lessons: map[key].slice().sort((a: Lesson, b: Lesson) => a.orderIndex - b.orderIndex),
+        };
+    });
 }
 
 const timeAgo = (iso: string) => {
@@ -395,6 +408,7 @@ const LearnPage: React.FC = () => {
 
     const [course, setCourse] = useState<Course | null>(null);
     const [lessons, setLessons] = useState<Lesson[]>([]);
+    const [chapters, setChapters] = useState<Chapter[]>([]);
     const [loading, setLoading] = useState(true);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set());
@@ -408,7 +422,7 @@ const LearnPage: React.FC = () => {
     const [interactionLoading, setInteractionLoading] = useState(false);
     const playerRef = useRef<YouTubePlayerHandle>(null);
 
-    const groups = useMemo(() => groupByChapter(lessons), [lessons]);
+    const groups = useMemo(() => groupByChapter(lessons, chapters), [lessons, chapters]);
     const allLessons = useMemo(() => groups.flatMap((g) => g.lessons), [groups]);
     const currentLesson = useMemo(
         () => (lessonId ? allLessons.find((l) => l.id === Number(lessonId)) : allLessons[0]) ?? null,
@@ -427,12 +441,14 @@ const LearnPage: React.FC = () => {
         (async () => {
             setLoading(true);
             try {
-                const [c, l] = await Promise.all([
+                const [c, l, ch] = await Promise.all([
                     courseService.getCourseById(courseId),
                     lessonService.getLessons(courseId, { count: true, orderby: 'OrderIndex asc' }),
+                    chapterService.getChapters(courseId),
                 ]);
                 setCourse(c);
                 setLessons(l.value ?? []);
+                setChapters(ch ?? []);
             } catch (e) { console.error(e); }
             finally { setLoading(false); }
         })();

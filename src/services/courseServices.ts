@@ -8,19 +8,7 @@ import type {
     CourseRequest,
     CourseSuggestion,
 } from "../types/course";
-import {
-    Skill,
-    SkillListResponse,
-    SkillMutationResponse,
-    SkillRequest
-} from "../types/skill";
-
-// ────────────────────────────────────────────────────────────
-// Endpoints (must match BE CoursesController route "api/Courses")
-// ────────────────────────────────────────────────────────────
-
 const BASE = "/Courses";
-const SKILL_BASE = "/Skills";
 
 const courseService = {
     /** GET /api/Courses with OData query */
@@ -73,40 +61,6 @@ const courseService = {
         return response.data;
     },
 
-    // ────────────────────────────────────────────────────────────
-    // Skill Management (Admin)
-    // ────────────────────────────────────────────────────────────
-
-    /** GET /api/Skills with OData query */
-    getSkills: async (params?: ODataParams): Promise<SkillListResponse> => {
-        const query = params ? buildODataQuery(params) : "$count=true";
-        const response = await api.get<SkillListResponse>(`${SKILL_BASE}?${query}`);
-        return response.data;
-    },
-
-    /** GET /api/Skills/{id} */
-    getSkillById: async (id: number): Promise<Skill> => {
-        const response = await api.get<Skill>(`${SKILL_BASE}/${id}`);
-        return response.data;
-    },
-
-    /** POST /api/Skills — create */
-    createSkill: async (data: SkillRequest): Promise<Skill> => {
-        const response = await api.post<SkillMutationResponse>(SKILL_BASE, data);
-        return response.data.data;
-    },
-
-    /** PUT /api/Skills/{id} — update */
-    updateSkill: async (id: number, data: SkillRequest): Promise<Skill> => {
-        const response = await api.put<SkillMutationResponse>(`${SKILL_BASE}/${id}`, data);
-        return response.data.data;
-    },
-
-    /** DELETE /api/Skills/{id} */
-    deleteSkill: async (id: number): Promise<{ success: boolean }> => {
-        const response = await api.delete(`${SKILL_BASE}/${id}`);
-        return response.data;
-    }
 };
 
 export default courseService;

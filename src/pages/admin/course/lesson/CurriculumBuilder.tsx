@@ -15,6 +15,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Lesson, LessonReorderItem } from '../../../../types/lesson';
 import { useChapters, type Chapter } from '../../../../hooks/useChapters';
 import lessonService from '../../../../services/lessonService';
+import chapterService from '../../../../services/chapterService';
 
 // ---------------------------------------------------------------------------
 // Utils
@@ -502,12 +503,43 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
         }
     };
 
-    const handleAddChapter = () => {
+    const handleAddChapter = async () => {
         const t = newChapterTitle.trim();
-        if (t) {
+        if (!t) return;
+        try {
+            const created = await chapterService.createChapter(courseId, {
+                title: t,
+                description: null,
+                orderIndex: chapters.filter((c) => c.id !== UNCATEGORIZED_ID).length,
+                isActive: true,
+            });
+            addChapter(t, `ch_be_${created.id}`);
+        } catch {
             addChapter(t);
-            setNewChapterTitle('');
-            setAddingChapter(false);
+        }
+        setNewChapterTitle('');
+        setAddingChapter(false);
+    };
+
+    const handleRenameChapter = async (feChapterId: string, title: string) => {
+        renameChapter(feChapterId, title);
+        const beId = getBeChapterId(feChapterId);
+        if (beId !== null) {
+            const orderIndex = chapters.findIndex((c) => c.id === feChapterId);
+            chapterService.updateChapter(courseId, beId, {
+                title,
+                description: null,
+                orderIndex,
+                isActive: true,
+            }).catch(console.error);
+        }
+    };
+
+    const handleDeleteChapter = async (feChapterId: string) => {
+        deleteChapter(feChapterId);
+        const beId = getBeChapterId(feChapterId);
+        if (beId !== null) {
+            chapterService.deleteChapter(courseId, beId).catch(console.error);
         }
     };
 
@@ -548,8 +580,8 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
                                     lessons={lessons}
                                     isUncategorized={chapter.id === UNCATEGORIZED_ID}
                                     onToggle={() => toggleCollapse(chapter.id)}
-                                    onRename={(t) => renameChapter(chapter.id, t)}
-                                    onDelete={() => deleteChapter(chapter.id)}
+                                    onRename={(t) => handleRenameChapter(chapter.id, t)}
+                                    onDelete={() => handleDeleteChapter(chapter.id)}
                                     onEditLesson={onEditLesson}
                                     onDeleteLesson={onDeleteLesson}
                                     onMoveLessonToChapter={moveLessonToChapter}

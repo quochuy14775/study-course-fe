@@ -110,27 +110,10 @@ export interface LessonReorderItem {
 }
 
 // ────────────────────────────────────────────────────────────
-// Chapter (returned by Course detail / chapter endpoints)
-// ────────────────────────────────────────────────────────────
-
-export interface Chapter {
-    id: number;
-    title: string;
-    description?: string | null;
-    orderIndex: number;
-    courseId: number;
-    lessonCount: number;
-    totalDurationSeconds: number;
-
-    // Audit
-    createdAt: string;
-    updatedAt?: string | null;
-    isDeleted: boolean;
-    isActive: boolean;
-}
-
-// ────────────────────────────────────────────────────────────
 // Legacy alias
 // ────────────────────────────────────────────────────────────
 
 export type LessonResponse = Lesson;
+
+// Re-export for backward compatibility
+export type { Chapter } from './chapter';

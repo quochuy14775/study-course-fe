@@ -107,8 +107,8 @@ export function useChapters(courseId: number | string | undefined, allLessons: L
         });
     }, [allLessons]);
 
-    const addChapter = useCallback((title: string) => {
-        const id = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const addChapter = useCallback((title: string, customId?: string) => {
+        const id = customId ?? `ch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         setData((prev) => ({ chapters: [...prev.chapters, { id, title, lessonIds: [] }] }));
         return id;
     }, []);
