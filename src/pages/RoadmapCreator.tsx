@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     Sparkles, Wand2, ArrowLeft, ArrowRight, Check, Search,
-    BookOpen, Clock, Layers, Code2, ChevronRight, X,
+    BookOpen, Clock, Layers, ChevronRight, X,
 } from 'lucide-react';
 import { showToast } from '../components/CustomToast';
 import languageService from '../services/languageService';

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil, Sparkles, Target, TrendingUp, PlayCircle } from 'lucide-react';
+import AuthGuardModal from '../components/AuthGuardModal';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 import RoadmapCreator from './RoadmapCreator';
 import RoadmapStepCard from '../components/RoadMapStepCard';
 import roadmapService from '../services/roadmapService';
@@ -32,7 +34,7 @@ const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({ roadmap
     return (
         <div className="mb-10 animate-fade-in-up">
             {/* Hero card */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-accent-700 p-8 text-white shadow-soft-lg">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-accent-700 p-5 sm:p-8 text-white shadow-soft-lg">
                 <div className="absolute -top-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
                 <div className="absolute -bottom-32 -left-10 w-96 h-96 bg-accent-400/20 rounded-full blur-3xl" />
 
@@ -42,7 +44,7 @@ const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({ roadmap
                             <Sparkles className="w-3 h-3" />
                             <span>Lộ trình đang theo</span>
                         </div>
-                        <h2 className="text-3xl font-extrabold mb-1 leading-tight">
+                        <h2 className="text-xl sm:text-3xl font-extrabold mb-1 leading-tight">
                             Hành trình trở thành<br />
                             <span className="text-accent-300">Developer chuyên nghiệp</span>
                         </h2>
@@ -106,7 +108,7 @@ const ActiveRoadmapDashboard: React.FC<ActiveRoadmapDashboardProps> = ({ roadmap
 // ─── Empty state ───────────────────────────────────────────────────────────────
 
 const EmptyHero: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-accent-700 p-8 lg:p-10 text-white shadow-soft-lg mb-10 animate-fade-in-up">
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-accent-700 p-5 sm:p-8 lg:p-10 text-white shadow-soft-lg mb-10 animate-fade-in-up">
         <div className="absolute -top-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 -left-10 w-96 h-96 bg-accent-400/20 rounded-full blur-3xl" />
 
@@ -119,10 +121,10 @@ const EmptyHero: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
                 <Target className="w-3 h-3" />
                 <span>Cá nhân hóa</span>
             </div>
-            <h2 className="text-3xl lg:text-4xl font-extrabold mb-3 leading-tight">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold mb-3 leading-tight">
                 Tạo lộ trình học tập của riêng bạn
             </h2>
-            <p className="text-base lg:text-lg text-white/85 leading-relaxed mb-6">
+            <p className="text-sm sm:text-base lg:text-lg text-white/85 leading-relaxed mb-6">
                 Chọn ngôn ngữ, framework yêu thích và nhận đề xuất khóa học phù hợp. Theo dõi tiến độ và đạt mục tiêu trở thành developer chuyên nghiệp.
             </p>
 
@@ -158,6 +160,7 @@ const RoadmapPage: React.FC = () => {
     const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
     const [loading, setLoading] = useState(true);
     const [creatorOpen, setCreatorOpen] = useState(false);
+    const { guardOpen, guardAction, closeGuard, requireAuth } = useAuthGuard();
 
     const fetchRoadmap = useCallback(async () => {
         setLoading(true);
@@ -176,6 +179,9 @@ const RoadmapPage: React.FC = () => {
     const handleCreated = (newRoadmap: Roadmap) => {
         setRoadmap(newRoadmap);
     };
+
+    const openCreator = () =>
+        requireAuth(() => setCreatorOpen(true), 'tạo lộ trình học tập cá nhân');
 
     return (
         <main className="min-h-screen bg-ink-50 relative">
@@ -206,10 +212,10 @@ const RoadmapPage: React.FC = () => {
                 ) : roadmap ? (
                     <ActiveRoadmapDashboard
                         roadmap={roadmap}
-                        onEdit={() => setCreatorOpen(true)}
+                        onEdit={openCreator}
                     />
                 ) : (
-                    <EmptyHero onCreate={() => setCreatorOpen(true)} />
+                    <EmptyHero onCreate={openCreator} />
                 )}
             </div>
 
@@ -217,6 +223,12 @@ const RoadmapPage: React.FC = () => {
                 isOpen={creatorOpen}
                 onClose={() => setCreatorOpen(false)}
                 onCreated={handleCreated}
+            />
+
+            <AuthGuardModal
+                isOpen={guardOpen}
+                onClose={closeGuard}
+                action={guardAction}
             />
         </main>
     );

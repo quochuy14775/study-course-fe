@@ -20,6 +20,17 @@ const STORAGE_KEY = (courseId: number | string) => `eduhub:course:${courseId}:ch
 
 const UNCATEGORIZED_ID = 'uncategorized';
 
+function chaptersEqual(a: Chapter[], b: Chapter[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i].id !== b[i].id || a[i].lessonIds.length !== b[i].lessonIds.length) return false;
+        for (let j = 0; j < a[i].lessonIds.length; j++) {
+            if (a[i].lessonIds[j] !== b[i].lessonIds[j]) return false;
+        }
+    }
+    return true;
+}
+
 const createDefaultData = (): ChaptersData => ({
     chapters: [
         { id: UNCATEGORIZED_ID, title: 'Chưa phân loại', lessonIds: [] },
@@ -71,7 +82,7 @@ export function useChapters(courseId: number | string | undefined, allLessons: L
 
             const missing = allLessons.filter((l) => !seen.has(l.id));
 
-            if (missing.length === 0 && JSON.stringify(cleaned) === JSON.stringify(prev.chapters)) {
+            if (missing.length === 0 && chaptersEqual(cleaned, prev.chapters)) {
                 return prev;
             }
 

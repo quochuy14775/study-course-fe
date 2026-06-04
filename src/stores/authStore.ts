@@ -6,12 +6,14 @@ interface User {
     exp: number;
     email: string;
     name: string;
+    avatarUrl?: string | null;
 }
 
 interface AuthState {
     token: string | null;
     user: User | null;
     setToken: (token: string) => void;
+    updateProfile: (data: { name: string; avatarUrl?: string | null }) => void;
     logout: () => void;
 }
 
@@ -44,6 +46,10 @@ export const useAuthStore = create<AuthState>((set) => ({
             set({ token: null, user: null });
         }
     },
+
+    updateProfile: (data) => set((s) => ({
+        user: s.user ? { ...s.user, name: data.name, avatarUrl: data.avatarUrl } : null,
+    })),
 
     logout: () => {
         localStorage.removeItem("auth-storage");

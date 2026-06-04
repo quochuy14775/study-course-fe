@@ -113,56 +113,67 @@ const Header: React.FC = () => {
                             <Search size={18} />
                         </button>
 
-                        <NotificationDropdown
-                            notifications={[
-                                { id: 1, message: 'Khóa học mới: Advanced TypeScript', time: '2 giờ trước', type: 'info' },
-                                { id: 2, message: 'Bạn đã hoàn thành React Fundamentals', time: '1 ngày trước', type: 'success' },
-                                { id: 3, message: 'Giảm 30% cho khóa Pro', time: '3 ngày trước', type: 'warning' },
-                            ]}
-                            onViewAll={() => console.log('View all')}
-                        />
+                        {user && <NotificationDropdown />}
 
-                        {/* Profile */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                className="flex items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-full hover:bg-ink-100 transition-colors"
-                            >
-                                <img src={avatarUrl} alt={userProfile.name} className="w-8 h-8 rounded-full ring-2 ring-white shadow-soft bg-ink-100" />
-                                <ChevronDown className={`hidden sm:block w-4 h-4 text-ink-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                            </button>
+                        {/* Profile — đã đăng nhập */}
+                        {user ? (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                    className="flex items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-full hover:bg-ink-100 transition-colors"
+                                >
+                                    <img src={avatarUrl} alt={userProfile.name} className="w-8 h-8 rounded-full ring-2 ring-white shadow-soft bg-ink-100" />
+                                    <ChevronDown className={`hidden sm:block w-4 h-4 text-ink-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
 
-                            {isDropdownOpen && (
-                                <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-ink-200 rounded-2xl shadow-soft-lg z-50 overflow-hidden animate-fade-in-up">
-                                    <div className="px-4 py-4 bg-gradient-to-br from-primary-50 to-accent-50 border-b border-ink-200">
-                                        <div className="flex items-center gap-3">
-                                            <img src={avatarUrl} alt={userProfile.name} className="w-11 h-11 rounded-full shadow-glow-primary bg-ink-100" />
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-ink-900 truncate">{userProfile.name}</p>
-                                                <p className="text-xs text-ink-500 truncate">{userProfile.email}</p>
+                                {isDropdownOpen && (
+                                    <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-ink-200 rounded-2xl shadow-soft-lg z-50 overflow-hidden animate-fade-in-up">
+                                        <div className="px-4 py-4 bg-gradient-to-br from-primary-50 to-accent-50 border-b border-ink-200">
+                                            <div className="flex items-center gap-3">
+                                                <img src={avatarUrl} alt={userProfile.name} className="w-11 h-11 rounded-full shadow-glow-primary bg-ink-100" />
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-ink-900 truncate">{userProfile.name}</p>
+                                                    <p className="text-xs text-ink-500 truncate">{userProfile.email}</p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <nav className="py-2">
-                                        <MenuItem icon={<User className="w-4 h-4" />} label="Trang cá nhân" onClick={() => { navigate('/personal'); setIsDropdownOpen(false); }} />
-                                        <MenuItem icon={<BookOpen className="w-4 h-4" />} label="Khóa học của tôi" onClick={() => { navigate('/my-courses'); setIsDropdownOpen(false); }} />
-                                        <MenuItem icon={<Bookmark className="w-4 h-4" />} label="Đã lưu" onClick={() => setIsDropdownOpen(false)} />
-                                        <MenuItem icon={<Settings className="w-4 h-4" />} label="Cài đặt" onClick={() => setIsDropdownOpen(false)} />
-                                    </nav>
+                                        <nav className="py-2">
+                                            <MenuItem icon={<User className="w-4 h-4" />} label="Trang cá nhân" onClick={() => { navigate('/personal'); setIsDropdownOpen(false); }} />
+                                            <MenuItem icon={<BookOpen className="w-4 h-4" />} label="Khóa học của tôi" onClick={() => { navigate('/my-courses'); setIsDropdownOpen(false); }} />
+                                            <MenuItem icon={<Bookmark className="w-4 h-4" />} label="Đã lưu" onClick={() => { navigate('/saved'); setIsDropdownOpen(false); }} />
+                                            <MenuItem icon={<Settings className="w-4 h-4" />} label="Cài đặt" onClick={() => { navigate('/settings'); setIsDropdownOpen(false); }} />
+                                        </nav>
 
-                                    <div className="border-t border-ink-200">
-                                        <button
-                                            onClick={handleLogout}
-                                            className="w-full px-4 py-3 text-left text-sm text-rose-600 hover:bg-rose-50 transition-colors font-medium flex items-center gap-3"
-                                        >
-                                            <LogOut className="w-4 h-4" />
-                                            Đăng xuất
-                                        </button>
+                                        <div className="border-t border-ink-200">
+                                            <button
+                                                onClick={handleLogout}
+                                                className="w-full px-4 py-3 text-left text-sm text-rose-600 hover:bg-rose-50 transition-colors font-medium flex items-center gap-3"
+                                            >
+                                                <LogOut className="w-4 h-4" />
+                                                Đăng xuất
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                )}
+                            </div>
+                        ) : (
+                            /* Chưa đăng nhập — hiện nút Đăng nhập / Đăng ký */
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => navigate('/login')}
+                                    className="hidden sm:inline-flex items-center px-3.5 py-2 text-sm font-medium text-ink-700 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-colors"
+                                >
+                                    Đăng nhập
+                                </button>
+                                <button
+                                    onClick={() => navigate('/signup')}
+                                    className="inline-flex items-center px-3.5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-primary-600 to-accent-600 rounded-xl shadow-glow-primary hover:brightness-105 active:scale-95 transition-all"
+                                >
+                                    Đăng ký
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 

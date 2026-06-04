@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -174,13 +174,13 @@ const LessonRow: React.FC<{
 // ─────────────────────────────────────────────────────────────
 // Comment card
 // ─────────────────────────────────────────────────────────────
-const CommentCard: React.FC<{
+const CommentCard = React.memo(function CommentCard({ comment, onLike, onReply, userInitials, isQA }: {
     comment: Comment;
     onLike: (id: number) => void;
     onReply: (parentCommentId: number, text: string) => Promise<void>;
     userInitials: string;
     isQA?: boolean;
-}> = ({ comment, onLike, onReply, userInitials, isQA }) => {
+}) {
     const initials = (comment.author ?? 'U').slice(0, 2).toUpperCase();
     const [showReplyInput, setShowReplyInput] = useState(false);
     const [replyText, setReplyText] = useState('');
@@ -289,7 +289,7 @@ const CommentCard: React.FC<{
             </div>
         </motion.div>
     );
-};
+});
 
 // ─────────────────────────────────────────────────────────────
 // Question card
@@ -410,7 +410,8 @@ const LearnPage: React.FC = () => {
     const [lessons, setLessons] = useState<Lesson[]>([]);
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [loading, setLoading] = useState(true);
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
     const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set());
     const [doneLessons, setDoneLessons] = useState<Set<number>>(new Set());
     const [activeTab, setActiveTab] = useState<'comments' | 'qa'>('comments');
@@ -418,8 +419,7 @@ const LearnPage: React.FC = () => {
     const [qaList, setQaList] = useState<Question[]>([]);
     const [notes, setNotes] = useState<Note[]>([]);
     const [noteInput, setNoteInput] = useState('');
-    const [notesOpen, setNotesOpen] = useState(true);
-    const [interactionLoading, setInteractionLoading] = useState(false);
+    const [notesOpen, setNotesOpen] = useState(!isMobile);
     const playerRef = useRef<YouTubePlayerHandle>(null);
 
     const groups = useMemo(() => groupByChapter(lessons, chapters), [lessons, chapters]);
@@ -457,19 +457,22 @@ const LearnPage: React.FC = () => {
     // Load comments, Q&A, notes from API when lesson changes
     useEffect(() => {
         if (!currentLesson) return;
+        let cancelled = false;
         setNoteInput('');
-        setInteractionLoading(true);
         Promise.all([
             lessonInteractionService.getNotes(currentLesson.id),
             lessonInteractionService.getComments(currentLesson.id),
             lessonInteractionService.getQuestions(currentLesson.id),
         ]).then(([n, c, q]) => {
+            if (cancelled) return;
             setNotes(n);
             setComments(c);
             setQaList(q);
-        }).catch(console.error)
-          .finally(() => setInteractionLoading(false));
-    }, [currentLesson?.id]);
+        }).catch((e) => {
+            if (!cancelled) console.error(e);
+        });
+        return () => { cancelled = true; };
+    }, [currentLesson?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (!loading && allLessons.length > 0 && !lessonId)
@@ -488,10 +491,11 @@ const LearnPage: React.FC = () => {
         setCollapsedChapters((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
     /** Fallback: nếu backend trả về "Người dùng" / rỗng thì dùng thông tin từ store */
-    const resolveAuthor = (apiAuthor: string): string =>
+    const resolveAuthor = useCallback((apiAuthor: string): string =>
         apiAuthor && apiAuthor !== 'Người dùng' && apiAuthor !== 'Unknown'
             ? apiAuthor
-            : (user?.name || user?.email || 'Bạn');
+            : (user?.name || user?.email || 'Bạn'),
+    [user]);
 
     const addComment = async (text: string) => {
         if (!currentLesson) return;
@@ -515,7 +519,7 @@ const LearnPage: React.FC = () => {
         }
     };
 
-    const toggleLikeComment = async (id: number) => {
+    const toggleLikeComment = useCallback(async (id: number) => {
         if (!currentLesson) return;
         try {
             const res = await lessonInteractionService.toggleCommentLike(currentLesson.id, id);
@@ -523,9 +527,9 @@ const LearnPage: React.FC = () => {
                 c.id === id ? { ...c, liked: res.liked, likeCount: res.likeCount } : c
             ));
         } catch (e) { console.error(e); }
-    };
+    }, [currentLesson]);
 
-    const addReply = async (parentCommentId: number, text: string) => {
+    const addReply = useCallback(async (parentCommentId: number, text: string) => {
         if (!currentLesson) return;
         try {
             const newReply = await lessonInteractionService.createComment(currentLesson.id, {
@@ -555,7 +559,7 @@ const LearnPage: React.FC = () => {
             console.error(e);
             toast.error('Không thể gửi trả lời. Vui lòng thử lại.');
         }
-    };
+    }, [currentLesson, resolveAuthor]);
 
     const addNote = async () => {
         if (!noteInput.trim() || !currentLesson) return;
@@ -604,16 +608,25 @@ const LearnPage: React.FC = () => {
     return (
         <div className="flex h-screen overflow-hidden bg-ink-50">
 
+            {/* Mobile backdrop for sidebar */}
+            {sidebarOpen && (
+                <div
+                    onClick={() => setSidebarOpen(false)}
+                    className="md:hidden fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
+                    aria-hidden
+                />
+            )}
+
             {/* ── Sidebar ──────────────────────────────────────── */}
             <AnimatePresence initial={false}>
                 {sidebarOpen && (
                     <motion.aside
                         key="sidebar"
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 296, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
+                        initial={{ x: -320, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: -320, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-                        className="flex-shrink-0 h-full bg-white border-r border-ink-200 flex flex-col overflow-hidden shadow-soft"
+                        className="fixed md:relative inset-y-0 left-0 z-40 md:z-auto w-[85vw] max-w-[296px] md:w-[296px] md:flex-shrink-0 h-full bg-white border-r border-ink-200 flex flex-col overflow-hidden shadow-soft md:shadow-none"
                     >
                         {/* Header */}
                         <div className="flex-shrink-0 px-4 py-4 border-b border-ink-100">
@@ -701,7 +714,7 @@ const LearnPage: React.FC = () => {
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
                 {/* Top bar */}
-                <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 bg-white border-b border-ink-200 shadow-soft">
+                <div className="flex-shrink-0 flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2.5 bg-white border-b border-ink-200 shadow-soft">
                     <button
                         onClick={() => setSidebarOpen((v) => !v)}
                         className="p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-ink-100 transition-all flex-shrink-0"
@@ -898,18 +911,27 @@ const LearnPage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Right column: Notes panel — sticky so it stays in view while left scrolls */}
+                    {/* Mobile backdrop for notes */}
+                    {notesOpen && (
+                        <div
+                            onClick={() => setNotesOpen(false)}
+                            className="md:hidden fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
+                            aria-hidden
+                        />
+                    )}
+
+                    {/* Right column: Notes panel — drawer on mobile, sticky side on desktop */}
                     <AnimatePresence initial={false}>
                         {notesOpen && (
                             <motion.aside
                                 key="notes-panel"
-                                initial={{ width: 0, opacity: 0 }}
-                                animate={{ width: 300, opacity: 1 }}
-                                exit={{ width: 0, opacity: 0 }}
+                                initial={{ x: 320, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: 320, opacity: 0 }}
                                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                                className="flex-shrink-0 sticky top-0 self-start h-[600px] overflow-hidden border-l border-ink-200 bg-ink-50"
+                                className="fixed md:sticky md:self-start inset-y-0 right-0 top-0 z-40 md:z-auto w-[88vw] max-w-[320px] md:w-[300px] md:flex-shrink-0 h-full md:h-[600px] overflow-hidden border-l border-ink-200 bg-ink-50 shadow-2xl md:shadow-none"
                             >
-                                <div className="w-[300px] h-full flex flex-col px-3 py-4">
+                                <div className="w-full md:w-[300px] h-full flex flex-col px-3 py-4">
                                     <NotePanel
                                         notes={notes}
                                         noteInput={noteInput}

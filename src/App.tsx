@@ -22,9 +22,13 @@ import ChatBot from "./components/ChatBot";
 import './App.css';
 import { useAuthStore } from "./stores/authStore";
 import { useUiStore } from "./stores/uiStore";
+import { useApplySettings } from "./hooks/useApplySettings";
 import LessonManagement from "./pages/admin/course/lesson";
 import LearnPage from "./pages/user/course/LearnPage";
 import MyCoursesPage from "./pages/user/course/MyCoursesPage";
+import SavedPage from "./pages/SavedPage";
+import SettingsPage from "./pages/SettingsPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 function ProtectedShell() {
     const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -49,8 +53,11 @@ function ProtectedShell() {
                         <Route path="/" element={<HomePage />} />
                         <Route path="/roadmap" element={<RoadmapPage />} />
                         <Route path="/articles" element={<ArticlesPage />} />
-                        <Route path="/personal" element={<PersonalPage />} />
-                        <Route path="/my-courses" element={<MyCoursesPage />} />
+                        <Route path="/personal"   element={<ProtectedRoute><PersonalPage /></ProtectedRoute>} />
+                        <Route path="/my-courses" element={<ProtectedRoute><MyCoursesPage /></ProtectedRoute>} />
+                        <Route path="/saved"      element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
+                        <Route path="/settings"  element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                        <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
 
                         {/* Admin only */}
                         <Route
@@ -94,6 +101,7 @@ function ProtectedShell() {
 
 function App() {
     const setToken = useAuthStore((state) => state.setToken);
+    useApplySettings();
 
     useEffect(() => {
         const raw = localStorage.getItem('auth-storage');
@@ -135,14 +143,8 @@ function App() {
                     }
                 />
 
-                <Route
-                    path="/*"
-                    element={
-                        <ProtectedRoute>
-                            <ProtectedShell />
-                        </ProtectedRoute>
-                    }
-                />
+                {/* Shell công khai — không cần đăng nhập để xem */}
+                <Route path="/*" element={<ProtectedShell />} />
             </Routes>
         </Router>
     );

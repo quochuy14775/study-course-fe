@@ -203,7 +203,7 @@ const PersonalPage: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                     {/* 1. PROFILE CARD */}
-                    <TiltCard className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 flex items-center gap-6 overflow-hidden">
+                    <TiltCard className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 sm:p-6 flex items-center gap-4 sm:gap-6 overflow-hidden">
                         {/* shimmer sweep */}
                         <motion.div
                             className="pointer-events-none absolute top-0 -left-1/3 w-1/3 h-full -skew-x-12 bg-gradient-to-r from-transparent via-white/60 to-transparent"
@@ -243,7 +243,7 @@ const PersonalPage: React.FC = () => {
                     </TiltCard>
 
                     {/* 2. ACHIEVEMENTS CARD */}
-                    <TiltCard className="bg-white border border-slate-200 rounded-xl p-6">
+                    <TiltCard className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Achievements</h3>
                             <span className="text-xs font-bold text-blue-600">

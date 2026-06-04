@@ -275,10 +275,12 @@ const MyCoursesPage: React.FC = () => {
     const [search, setSearch] = useState('');
 
     useEffect(() => {
+        let mounted = true;
         courseService.getCourses({ count: true, top: 20 })
-            .then((res) => setCourses(res.value ?? []))
-            .catch(() => setCourses([]))
-            .finally(() => setLoading(false));
+            .then((res) => { if (mounted) setCourses(res.value ?? []); })
+            .catch(() => { if (mounted) setCourses([]); })
+            .finally(() => { if (mounted) setLoading(false); });
+        return () => { mounted = false; };
     }, []);
 
     const withProgress = useMemo(

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Star, Clock, BookOpen, Heart, ArrowRight, Crown, Zap } from 'lucide-react';
+import AuthGuardModal from '../../../components/AuthGuardModal';
+import { useAuthGuard } from '../../../hooks/useAuthGuard';
 import { Course, formatDurationSeconds } from '../../../types/course';
 
 interface CourseCardProps {
@@ -27,6 +29,7 @@ const LEVEL_CONFIG: Record<string, { label: string; className: string }> = {
 const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
     const [wishlisted, setWishlisted] = useState(false);
     const navigate = useNavigate();
+    const { guardOpen, guardAction, closeGuard, requireAuth } = useAuthGuard();
 
     const g = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
     const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
@@ -199,7 +202,10 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
                         )}
                     </div>
                     <motion.button
-                        onClick={() => navigate(`/courses/${course.id}/learn`)}
+                        onClick={() => requireAuth(
+                            () => navigate(`/courses/${course.id}/learn`),
+                            `${isPro ? 'mua' : 'học'} khóa học "${course.title}"`
+                        )}
                         whileTap={{ scale: 0.95 }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
                             isPro
@@ -210,6 +216,12 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
                         {isPro ? 'Mua ngay' : 'Học ngay'}
                         <ArrowRight className="w-3 h-3" />
                     </motion.button>
+
+                    <AuthGuardModal
+                        isOpen={guardOpen}
+                        onClose={closeGuard}
+                        action={guardAction}
+                    />
                 </div>
             </div>
         </motion.div>

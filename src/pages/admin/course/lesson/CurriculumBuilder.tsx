@@ -198,7 +198,7 @@ const SortableLesson: React.FC<SortableLessonProps> = ({
 interface SortableChapterProps {
     chapter: Chapter;
     chapters: Chapter[];
-    lessons: Lesson[];
+    lessonMap: Map<number, Lesson>;
     isUncategorized: boolean;
     onToggle: () => void;
     onRename: (title: string) => void;
@@ -209,7 +209,7 @@ interface SortableChapterProps {
 }
 
 const SortableChapter: React.FC<SortableChapterProps> = ({
-    chapter, chapters, lessons, isUncategorized, onToggle, onRename, onDelete,
+    chapter, chapters, lessonMap, isUncategorized, onToggle, onRename, onDelete,
     onEditLesson, onDeleteLesson, onMoveLessonToChapter,
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -232,7 +232,7 @@ const SortableChapter: React.FC<SortableChapterProps> = ({
     };
 
     const lessonsInChapter = chapter.lessonIds
-        .map((id) => lessons.find((l) => l.id === id))
+        .map((id) => lessonMap.get(id))
         .filter((l): l is Lesson => !!l);
 
     const totalDuration = lessonsInChapter.reduce((sum, l) => sum + (l.duration ?? 0), 0);
@@ -393,6 +393,8 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
         () => lessons.map((l) => ({ id: l.id, chapterId: l.chapterId ?? null })),
         [lessons],
     );
+
+    const lessonMap = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
     const {
         chapters, addChapter, renameChapter, deleteChapter, toggleCollapse,
         reorderChapters, reorderLessonsInChapter, moveLessonToChapter, moveLessonToChapterAtIndex, UNCATEGORIZED_ID,
@@ -544,9 +546,14 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
     };
 
     // Overall stats
-    const totalLessons = lessons.length;
-    const totalDuration = lessons.reduce((s, l) => s + (l.duration ?? 0), 0);
-    const activeChapters = chapters.filter((c) => c.id !== UNCATEGORIZED_ID || c.lessonIds.length > 0);
+    const { totalLessons, totalDuration } = useMemo(() => ({
+        totalLessons: lessons.length,
+        totalDuration: lessons.reduce((s, l) => s + (l.duration ?? 0), 0),
+    }), [lessons]);
+    const activeChapters = useMemo(
+        () => chapters.filter((c) => c.id !== UNCATEGORIZED_ID || c.lessonIds.length > 0),
+        [chapters, UNCATEGORIZED_ID],
+    );
 
     return (
         <div className="space-y-4">
@@ -577,7 +584,7 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
                                     key={chapter.id}
                                     chapter={chapter}
                                     chapters={chapters}
-                                    lessons={lessons}
+                                    lessonMap={lessonMap}
                                     isUncategorized={chapter.id === UNCATEGORIZED_ID}
                                     onToggle={() => toggleCollapse(chapter.id)}
                                     onRename={(t) => handleRenameChapter(chapter.id, t)}

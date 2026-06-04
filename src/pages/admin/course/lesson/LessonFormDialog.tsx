@@ -126,20 +126,22 @@ const SortableLesson: React.FC<{
     const [fetchingDuration, setFetchingDuration] = useState(false);
     const {attributes, listeners, setNodeRef, transform, transition, isDragging} = useSortable({id: item.tempId});
 
-    // Auto-fetch title + duration + thumbnail khi videoId thay đổi
+    // Auto-fetch title + duration + thumbnail khi videoId thay đổi (debounce 600ms)
     useEffect(() => {
         const id = item.videoId?.trim();
         if (!id || id.length < 6) return;
         let cancelled = false;
-        setFetchingDuration(true);
-        fetchYouTubeMeta(id).then(meta => {
-            if (cancelled || !meta) return;
-            if (meta.duration) updateItemField(item.tempId, 'duration', meta.duration);
-            if (meta.title && !item.title) updateItemField(item.tempId, 'title', meta.title);
-            if (meta.thumbnailUrl && !item.thumbnailUrl) updateItemField(item.tempId, 'thumbnailUrl', meta.thumbnailUrl);
-            setFetchingDuration(false);
-        });
-        return () => { cancelled = true; };
+        const timer = setTimeout(() => {
+            setFetchingDuration(true);
+            fetchYouTubeMeta(id).then(meta => {
+                if (cancelled || !meta) { setFetchingDuration(false); return; }
+                if (meta.duration) updateItemField(item.tempId, 'duration', meta.duration);
+                if (meta.title && !item.title) updateItemField(item.tempId, 'title', meta.title);
+                if (meta.thumbnailUrl && !item.thumbnailUrl) updateItemField(item.tempId, 'thumbnailUrl', meta.thumbnailUrl);
+                setFetchingDuration(false);
+            });
+        }, 600);
+        return () => { cancelled = true; clearTimeout(timer); };
     }, [item.videoId]); // eslint-disable-line react-hooks/exhaustive-deps
     const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
@@ -306,21 +308,23 @@ const LessonFormDialog: React.FC<Props> = ({open, onClose, onCreate, onUpdate, e
         return () => window.removeEventListener('keydown', onKey);
     }, [open, onClose]);
 
-    // Auto-fetch title + duration + thumbnail cho single edit khi videoId thay đổi
+    // Auto-fetch title + duration + thumbnail cho single edit khi videoId thay đổi (debounce 600ms)
     useEffect(() => {
         const id = singleForm.videoId?.trim();
         if (!id || id.length < 6) return;
         let cancelled = false;
-        fetchYouTubeMeta(id).then(meta => {
-            if (cancelled || !meta) return;
-            setSingleForm(prev => ({
-                ...prev,
-                ...(meta.duration ? { duration: meta.duration } : {}),
-                ...(meta.title && !prev.title ? { title: meta.title } : {}),
-                ...(meta.thumbnailUrl && !prev.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
-            }));
-        });
-        return () => { cancelled = true; };
+        const timer = setTimeout(() => {
+            fetchYouTubeMeta(id).then(meta => {
+                if (cancelled || !meta) return;
+                setSingleForm(prev => ({
+                    ...prev,
+                    ...(meta.duration ? { duration: meta.duration } : {}),
+                    ...(meta.title && !prev.title ? { title: meta.title } : {}),
+                    ...(meta.thumbnailUrl && !prev.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
+                }));
+            });
+        }, 600);
+        return () => { cancelled = true; clearTimeout(timer); };
     }, [singleForm.videoId]);
 
     const recalcOrder = (list: TempLesson[]) => {
@@ -489,12 +493,12 @@ const LessonFormDialog: React.FC<Props> = ({open, onClose, onCreate, onUpdate, e
     const activeItem = activeId ? items.find(i => i.tempId === activeId) ?? null : null;
 
     return (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <div
                 className="absolute inset-0 bg-black/20 backdrop-blur-sm"/>
 
             <div
-                className="relative w-[720px] max-w-[95%] p-6 rounded-2xl shadow-lg bg-white border border-ink-200">
+                className="relative w-full sm:w-[720px] max-w-full sm:max-w-[95%] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl shadow-lg bg-white border border-ink-200">
 
                 <div className="flex items-start justify-between mb-4">
                     <div>

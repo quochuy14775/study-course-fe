@@ -190,6 +190,74 @@ button:disabled,
   100% { transform: scaleX(0); }
 }
 
+/* ── Dark mode overrides ───────────────────────────────────────
+   Triggered by `.dark` on <html>. Swap ink-* + white surfaces
+   without touching every component. */
+
+html.dark {
+  background-color: #0b1220;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
+/* Surfaces */
+html.dark .bg-white,
+html.dark .bg-white\/80,
+html.dark .bg-white\/90 {
+  background-color: #111827 !important;
+}
+html.dark .bg-ink-50,
+html.dark .bg-ink-50\/50,
+html.dark .bg-ink-50\/60 {
+  background-color: #0f172a !important;
+}
+html.dark .bg-ink-100 { background-color: #1e293b !important; }
+html.dark .bg-ink-200 { background-color: #334155 !important; }
+
+/* Text */
+html.dark .text-ink-900 { color: #f1f5f9 !important; }
+html.dark .text-ink-800 { color: #e2e8f0 !important; }
+html.dark .text-ink-700 { color: #cbd5e1 !important; }
+html.dark .text-ink-600 { color: #94a3b8 !important; }
+html.dark .text-ink-500 { color: #94a3b8 !important; }
+html.dark .text-ink-400 { color: #64748b !important; }
+html.dark .text-ink-300 { color: #475569 !important; }
+
+/* Borders */
+html.dark .border-ink-100 { border-color: #1e293b !important; }
+html.dark .border-ink-200 { border-color: #334155 !important; }
+html.dark .border-ink-300 { border-color: #475569 !important; }
+
+/* Hover bg */
+html.dark .hover\:bg-ink-50:hover  { background-color: #1e293b !important; }
+html.dark .hover\:bg-ink-100:hover { background-color: #334155 !important; }
+
+/* Scrollbar */
+html.dark ::-webkit-scrollbar-thumb { background: #334155; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Selection */
+html.dark ::selection { background: rgba(139, 92, 246, 0.35); color: #f5f3ff; }
+
+/* Cursors — switch default to light fill on dark bg */
+html.dark * {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><path d="M5.5 3.5 L27 18 L16 19 L11 28 Z" fill="%23f1f5f9" stroke="%230f172a" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>') 4 3, auto;
+}
+
+/* Reduced motion */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
+
 /* Card hover lift */
 .card-lift {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);

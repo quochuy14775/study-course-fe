@@ -13,16 +13,18 @@ const Sidebar: React.FC = () => {
     const closeMobile = useUiStore((s) => s.closeSidebarMobile);
 
     const menuItems = [
-        { icon: Home, label: 'Trang chủ', path: '/', roles: ['User'] },
-        { icon: BookOpen, label: 'Lộ trình', path: '/roadmap', roles: ['User'] },
-        { icon: FileText, label: 'Bài viết', path: '/articles', roles: ['User'] },
-        { icon: Settings, label: 'Quản lý khóa học', path: '/management', roles: ['Admin'] },
-        { icon: Code2, label: 'Ngôn ngữ', path: '/management/languages', roles: ['Admin'] },
-        { icon: Layers, label: 'Framework', path: '/management/frameworks', roles: ['Admin'] },
+        { icon: Home,     label: 'Trang chủ', path: '/',         roles: ['Guest', 'User'] },
+        { icon: BookOpen, label: 'Lộ trình',  path: '/roadmap',  roles: ['Guest', 'User'] },
+        { icon: FileText, label: 'Bài viết',  path: '/articles', roles: ['Guest', 'User'] },
+        { icon: Settings, label: 'Quản lý khóa học',       path: '/management',            roles: ['Admin'] },
+        { icon: Code2,    label: 'Ngôn ngữ',                path: '/management/languages',  roles: ['Admin'] },
+        { icon: Layers,   label: 'Framework',               path: '/management/frameworks', roles: ['Admin'] },
     ];
 
+    // Guest (chưa đăng nhập) → role = '' → map sang 'Guest'
+    const effectiveRole = user?.role || 'Guest';
     const filteredMenu = menuItems.filter(item =>
-        item.roles.includes(user?.role || '')
+        item.roles.includes(effectiveRole)
     );
 
     const isActive = (path: string) => location.pathname === path;

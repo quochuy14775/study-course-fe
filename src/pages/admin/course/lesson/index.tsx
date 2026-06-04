@@ -94,7 +94,7 @@ const LessonManagement: React.FC = () => {
 
         fetchAll();
         return () => { mounted = false; };
-    }, [courseId, state?.courseTitle]);
+    }, [courseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const openCreate = () => { setEditing(null); setOpenForm(true); };
     const openEdit = (l: Lesson) => { setEditing(l); setOpenForm(true); };
