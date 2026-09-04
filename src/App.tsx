@@ -13,6 +13,7 @@ import SetupAccountPage from './pages/SetupAccountPage';
 import CourseManagement from "./pages/admin/course";
 import LanguageManagement from "./pages/admin/language";
 import FrameworkManagement from "./pages/admin/framework";
+import CertificateManagement from "./pages/admin/certificate";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -25,6 +26,9 @@ import { useUiStore } from "./stores/uiStore";
 import { useApplySettings } from "./hooks/useApplySettings";
 import LessonManagement from "./pages/admin/course/lesson";
 import LearnPage from "./pages/user/course/LearnPage";
+import CourseDetailPage from "./pages/user/course/CourseDetailPage";
+import PricingPage from "./pages/PricingPage";
+import CertificatePage from "./pages/user/CertificatePage";
 import MyCoursesPage from "./pages/user/course/MyCoursesPage";
 import SavedPage from "./pages/SavedPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -58,6 +62,9 @@ function ProtectedShell() {
                         <Route path="/saved"      element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
                         <Route path="/settings"  element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+                        <Route path="/courses/:courseId" element={<CourseDetailPage />} />
+                        <Route path="/pricing" element={<PricingPage />} />
+                        <Route path="/certificates/:courseId" element={<ProtectedRoute><CertificatePage /></ProtectedRoute>} />
 
                         {/* Admin only */}
                         <Route
@@ -89,6 +96,14 @@ function ProtectedShell() {
                             element={
                                 <ProtectedRoute allowedRoles={["Admin"]}>
                                     <LessonManagement />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/management/certificates"
+                            element={
+                                <ProtectedRoute allowedRoles={["Admin"]}>
+                                    <CertificateManagement />
                                 </ProtectedRoute>
                             }
                         />

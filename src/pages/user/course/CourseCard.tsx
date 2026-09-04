@@ -50,7 +50,10 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
             }`}
         >
             {/* ── Thumbnail ───────────────────────────────────────── */}
-            <div className="relative aspect-[16/9] overflow-hidden flex-shrink-0">
+            <div
+                onClick={() => navigate(`/courses/${course.id}`)}
+                className="relative aspect-[16/9] overflow-hidden flex-shrink-0 cursor-pointer"
+            >
                 {course.imageUrl ? (
                     /* Real thumbnail — Ken Burns zoom */
                     <motion.img
@@ -159,7 +162,10 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
                 </div>
 
                 {/* Title */}
-                <h3 className="text-sm font-bold text-ink-900 line-clamp-2 leading-snug">
+                <h3
+                    onClick={() => navigate(`/courses/${course.id}`)}
+                    className="text-sm font-bold text-ink-900 line-clamp-2 leading-snug cursor-pointer hover:text-primary-600 transition-colors"
+                >
                     {course.title}
                 </h3>
 

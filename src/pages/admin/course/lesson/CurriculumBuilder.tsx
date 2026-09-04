@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
     GripVertical, ChevronDown, Plus, Pencil, Trash2, MoreVertical,
-    PlayCircle, Clock, FolderPlus, FileVideo, Move, Check, X,
+    PlayCircle, Clock, FolderPlus, FileVideo, Move, Check, X, HelpCircle,
 } from 'lucide-react';
 import {
     DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -41,10 +41,11 @@ interface SortableLessonProps {
     onEdit: () => void;
     onDelete: () => void;
     onMoveToChapter: (targetChapterId: string) => void;
+    onEditQuiz: () => void;
 }
 
 const SortableLesson: React.FC<SortableLessonProps> = ({
-    lesson, indexInChapter, chapters, currentChapterId, onEdit, onDelete, onMoveToChapter,
+    lesson, indexInChapter, chapters, currentChapterId, onEdit, onDelete, onMoveToChapter, onEditQuiz,
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: `lesson:${lesson.id}`,
@@ -128,6 +129,13 @@ const SortableLesson: React.FC<SortableLessonProps> = ({
             {/* Actions */}
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
+                    onClick={onEditQuiz}
+                    className="p-2 rounded-lg text-ink-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                    title="Soạn quiz cuối bài"
+                >
+                    <HelpCircle size={14} />
+                </button>
+                <button
                     onClick={onEdit}
                     className="p-2 rounded-lg text-ink-500 hover:text-primary-600 hover:bg-primary-50 transition-colors"
                     title="Chỉnh sửa"
@@ -206,11 +214,12 @@ interface SortableChapterProps {
     onEditLesson: (lesson: Lesson) => void;
     onDeleteLesson: (id: number) => void;
     onMoveLessonToChapter: (lessonId: number, targetId: string) => void;
+    onEditQuiz: (lesson: Lesson) => void;
 }
 
 const SortableChapter: React.FC<SortableChapterProps> = ({
     chapter, chapters, lessonMap, isUncategorized, onToggle, onRename, onDelete,
-    onEditLesson, onDeleteLesson, onMoveLessonToChapter,
+    onEditLesson, onDeleteLesson, onMoveLessonToChapter, onEditQuiz,
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: `chapter:${chapter.id}`,
@@ -363,6 +372,7 @@ const SortableChapter: React.FC<SortableChapterProps> = ({
                                         onEdit={() => onEditLesson(lesson)}
                                         onDelete={() => onDeleteLesson(lesson.id)}
                                         onMoveToChapter={(target) => onMoveLessonToChapter(lesson.id, target)}
+                                        onEditQuiz={() => onEditQuiz(lesson)}
                                     />
                                 ))}
                             </div>
@@ -384,10 +394,11 @@ interface CurriculumBuilderProps {
     onAddLesson: () => void;
     onEditLesson: (lesson: Lesson) => void;
     onDeleteLesson: (id: number) => void;
+    onEditQuiz: (lesson: Lesson) => void;
 }
 
 const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
-    courseId, lessons, onAddLesson, onEditLesson, onDeleteLesson,
+    courseId, lessons, onAddLesson, onEditLesson, onDeleteLesson, onEditQuiz,
 }) => {
     const allLessons = useMemo(
         () => lessons.map((l) => ({ id: l.id, chapterId: l.chapterId ?? null })),
@@ -592,6 +603,7 @@ const CurriculumBuilder: React.FC<CurriculumBuilderProps> = ({
                                     onEditLesson={onEditLesson}
                                     onDeleteLesson={onDeleteLesson}
                                     onMoveLessonToChapter={moveLessonToChapter}
+                                    onEditQuiz={onEditQuiz}
                                 />
                             ))}
                         </div>

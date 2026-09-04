@@ -5,19 +5,24 @@ import {
     ChevronDown, CheckCircle2, Circle, Clock, PlayCircle,
     BookOpen, ArrowLeft, ArrowRight, Menu, X,
     MessageSquare, HelpCircle, Send, ThumbsUp, ChevronRight,
-    Sparkles, BookMarked,
+    Sparkles, BookMarked, Lock,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import NotePanel from './NotePanel';
+import QuizPanel from './QuizPanel';
+import CourseTestCard from './CourseTestCard';
 import courseService from '../../../services/courseServices';
 import lessonService from '../../../services/lessonService';
 import chapterService from '../../../services/chapterService';
 import lessonInteractionService from '../../../services/lessonInteractionService';
+import quizService from '../../../services/quizService';
+import progressService from '../../../services/progressService';
 import { useAuthStore } from '../../../stores/authStore';
 import { Course, formatDurationSeconds } from '../../../types/course';
 import { Lesson } from '../../../types/lesson';
 import type { Chapter } from '../../../types/chapter';
 import type { Note, Comment, Question } from '../../../types/lessonInteraction';
+import type { Quiz, CourseTest } from '../../../types/quiz';
 
 interface ChapterGroup { chapterId: number | null; title: string; lessons: Lesson[] }
 
@@ -168,6 +173,42 @@ const LessonRow: React.FC<{
                 )}
             </div>
         </div>
+    </button>
+);
+
+// ─────────────────────────────────────────────────────────────
+// Quiz row — mục con dưới mỗi bài học, khóa cho tới khi học xong
+// ─────────────────────────────────────────────────────────────
+const QuizRow: React.FC<{
+    locked: boolean; passed: boolean; isActive: boolean; onClick: () => void;
+}> = ({ locked, passed, isActive, onClick }) => (
+    <button
+        onClick={locked ? undefined : onClick}
+        disabled={locked}
+        className={`w-full flex items-center gap-2.5 pl-8 pr-3 py-2 rounded-xl text-left transition-all duration-200 group ${
+            isActive
+                ? 'bg-amber-50 border border-amber-200'
+                : locked
+                    ? 'cursor-not-allowed border border-transparent'
+                    : 'hover:bg-amber-50/60 border border-transparent'
+        }`}
+    >
+        <div className="flex-shrink-0">
+            {locked ? (
+                <Lock className="w-3.5 h-3.5 text-ink-300" />
+            ) : passed ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-code-500" />
+            ) : (
+                <HelpCircle className={`w-3.5 h-3.5 ${isActive ? 'text-amber-500' : 'text-amber-400'}`} />
+            )}
+        </div>
+        <span className={`text-xs font-medium ${
+            locked ? 'text-ink-300' : isActive ? 'text-amber-700' : passed ? 'text-ink-400' : 'text-ink-600 group-hover:text-amber-700'
+        }`}>
+            Quiz cuối bài
+        </span>
+        {locked && <span className="text-[10px] text-ink-300 ml-auto">Học xong để mở</span>}
+        {!locked && passed && <span className="text-[10px] text-code-500 ml-auto font-semibold">Đã đạt</span>}
     </button>
 );
 
@@ -415,6 +456,12 @@ const LearnPage: React.FC = () => {
     const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set());
     const [doneLessons, setDoneLessons] = useState<Set<number>>(new Set());
     const [activeTab, setActiveTab] = useState<'comments' | 'qa'>('comments');
+    const [quizPassed, setQuizPassed] = useState<Set<number>>(new Set());
+    const [viewingQuizFor, setViewingQuizFor] = useState<number | null>(null);
+    const [lessonQuiz, setLessonQuiz] = useState<Quiz | null>(null);
+    const [takingCourseTest, setTakingCourseTest] = useState(false);
+    const [courseTestQuiz, setCourseTestQuiz] = useState<Quiz | null>(null);
+    const [courseTest, setCourseTest] = useState<CourseTest | null>(null);
     const [comments, setComments] = useState<Comment[]>([]);
     const [qaList, setQaList] = useState<Question[]>([]);
     const [notes, setNotes] = useState<Note[]>([]);
@@ -474,17 +521,90 @@ const LearnPage: React.FC = () => {
         return () => { cancelled = true; };
     }, [currentLesson?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Load lesson quiz — 404 just means this lesson has no quiz configured yet.
+    useEffect(() => {
+        if (!currentLesson) { setLessonQuiz(null); return; }
+        let cancelled = false;
+        quizService.getLessonQuiz(currentLesson.id)
+            .then((q) => { if (!cancelled) setLessonQuiz(q); })
+            .catch(() => { if (!cancelled) setLessonQuiz(null); });
+        return () => { cancelled = true; };
+    }, [currentLesson?.id]);
+
+    const refreshCourseTest = useCallback(() => {
+        if (!courseId) return;
+        quizService.getCourseTest(Number(courseId))
+            .then(setCourseTest)
+            .catch(() => setCourseTest(null));
+    }, [courseId]);
+
+    // Load course-test card — 404 just means no course test has been authored yet.
+    useEffect(() => {
+        refreshCourseTest();
+    }, [refreshCourseTest]);
+
+    // Hydrate completed lessons from the DB — otherwise "done" state resets on every refresh
+    // and the course-test unlock check (which reads server-side progress) never agrees with the UI.
+    useEffect(() => {
+        if (!courseId) return;
+        progressService.getCourseProgress(Number(courseId))
+            .then((ids) => setDoneLessons(new Set(ids)))
+            .catch((e) => console.error(e));
+    }, [courseId]);
+
     useEffect(() => {
         if (!loading && allLessons.length > 0 && !lessonId)
             navigate(`/courses/${courseId}/learn/${allLessons[0].id}`, { replace: true });
     }, [loading, allLessons, lessonId, courseId, navigate]);
 
-    const goToLesson = (id: number) => navigate(`/courses/${courseId}/learn/${id}`);
+    const goToLesson = (id: number) => {
+        setViewingQuizFor(null);
+        setTakingCourseTest(false);
+        navigate(`/courses/${courseId}/learn/${id}`);
+    };
+
+    const openQuiz = (lessonId: number) => { setTakingCourseTest(false); setViewingQuizFor(lessonId); };
 
     const markDone = () => {
         if (!currentLesson) return;
-        setDoneLessons((prev) => new Set(prev).add(currentLesson.id));
+        const lessonId = currentLesson.id;
+        setDoneLessons((prev) => new Set(prev).add(lessonId));
+        progressService.markComplete(lessonId)
+            .then(() => refreshCourseTest())
+            .catch((e) => {
+                console.error(e);
+                toast.error('Không thể lưu tiến độ. Vui lòng thử lại.');
+            });
+        if (lessonQuiz && !quizPassed.has(lessonId)) {
+            toast.info('Hoàn thành quiz cuối bài để mở khóa bài tiếp theo.');
+            openQuiz(lessonId);
+            return;
+        }
         if (nextLesson) goToLesson(nextLesson.id);
+    };
+
+    const goNext = () => {
+        if (!nextLesson || !currentLesson) return;
+        if (lessonQuiz && !quizPassed.has(currentLesson.id)) {
+            toast.info('Hoàn thành quiz cuối bài để mở khóa bài tiếp theo.');
+            openQuiz(currentLesson.id);
+            return;
+        }
+        goToLesson(nextLesson.id);
+    };
+
+    const passQuiz = () => {
+        if (!currentLesson) return;
+        setQuizPassed((prev) => new Set(prev).add(currentLesson.id));
+        refreshCourseTest();
+    };
+
+    const startCourseTest = () => {
+        if (!courseId) return;
+        setViewingQuizFor(null);
+        quizService.getCourseTestToTake(Number(courseId))
+            .then((q) => { setCourseTestQuiz(q); setTakingCourseTest(true); })
+            .catch((e) => { console.error(e); toast.error('Bài test đang bị khóa hoặc chưa sẵn sàng.'); });
     };
 
     const toggleChapter = (key: string) =>
@@ -690,14 +810,23 @@ const LearnPage: React.FC = () => {
                                                     className="overflow-hidden space-y-0.5 ml-1 mt-0.5"
                                                 >
                                                     {group.lessons.map((lesson, li) => (
-                                                        <LessonRow
-                                                            key={lesson.id}
-                                                            lesson={lesson}
-                                                            index={before + li + 1}
-                                                            isActive={currentLesson?.id === lesson.id}
-                                                            isDone={doneLessons.has(lesson.id)}
-                                                            onClick={() => goToLesson(lesson.id)}
-                                                        />
+                                                        <React.Fragment key={lesson.id}>
+                                                            <LessonRow
+                                                                lesson={lesson}
+                                                                index={before + li + 1}
+                                                                isActive={currentLesson?.id === lesson.id && viewingQuizFor !== lesson.id}
+                                                                isDone={doneLessons.has(lesson.id)}
+                                                                onClick={() => goToLesson(lesson.id)}
+                                                            />
+                                                            {currentLesson?.id === lesson.id && lessonQuiz && (
+                                                                <QuizRow
+                                                                    locked={!doneLessons.has(lesson.id)}
+                                                                    passed={quizPassed.has(lesson.id)}
+                                                                    isActive={viewingQuizFor === lesson.id}
+                                                                    onClick={() => openQuiz(lesson.id)}
+                                                                />
+                                                            )}
+                                                        </React.Fragment>
                                                     ))}
                                                 </motion.div>
                                             )}
@@ -706,6 +835,12 @@ const LearnPage: React.FC = () => {
                                 );
                             })}
                         </div>
+
+                        {courseTest && (
+                            <div className="flex-shrink-0 p-3 border-t border-ink-100">
+                                <CourseTestCard test={courseTest} courseId={Number(courseId)} onStart={startCourseTest} />
+                            </div>
+                        )}
                     </motion.aside>
                 )}
             </AnimatePresence>
@@ -759,7 +894,7 @@ const LearnPage: React.FC = () => {
                             <span className="hidden sm:inline">Trước</span>
                         </button>
                         <button
-                            onClick={() => nextLesson && goToLesson(nextLesson.id)}
+                            onClick={goNext}
                             disabled={!nextLesson}
                             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ink-500 hover:text-ink-800 hover:bg-ink-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                         >
@@ -791,6 +926,28 @@ const LearnPage: React.FC = () => {
                     {/* Left column: video + lesson info + comments */}
                     <div className="flex-1 min-w-0">
                         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+
+                          {takingCourseTest && courseTestQuiz ? (
+                            <motion.div key="course-test" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-3">
+                                <button
+                                    onClick={() => setTakingCourseTest(false)}
+                                    className="flex items-center gap-1.5 text-xs font-medium text-ink-500 hover:text-primary-600 transition-colors"
+                                >
+                                    <ArrowLeft className="w-3.5 h-3.5" /> Quay lại bài học
+                                </button>
+                                <QuizPanel quiz={courseTestQuiz} onFinish={refreshCourseTest} />
+                            </motion.div>
+                          ) : currentLesson && viewingQuizFor === currentLesson.id && lessonQuiz ? (
+                            <motion.div key={`quiz-${currentLesson.id}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-3">
+                                <button
+                                    onClick={() => setViewingQuizFor(null)}
+                                    className="flex items-center gap-1.5 text-xs font-medium text-ink-500 hover:text-primary-600 transition-colors"
+                                >
+                                    <ArrowLeft className="w-3.5 h-3.5" /> Quay lại bài học
+                                </button>
+                                <QuizPanel quiz={lessonQuiz} onPassed={passQuiz} />
+                            </motion.div>
+                          ) : (<>
 
                             {/* Video */}
                             <motion.div
@@ -908,6 +1065,7 @@ const LearnPage: React.FC = () => {
                                 </div>
                             </div>
 
+                          </>)}
                         </div>
                     </div>
 

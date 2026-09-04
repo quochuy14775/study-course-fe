@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, FileText, Settings, ChevronLeft, Sparkles, X, Code2, Layers } from 'lucide-react';
+import { Home, BookOpen, FileText, Settings, ChevronLeft, Sparkles, X, Code2, Layers, Award } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from "../stores/authStore";
 import { useUiStore } from "../stores/uiStore";
@@ -19,6 +19,7 @@ const Sidebar: React.FC = () => {
         { icon: Settings, label: 'Quản lý khóa học',       path: '/management',            roles: ['Admin'] },
         { icon: Code2,    label: 'Ngôn ngữ',                path: '/management/languages',  roles: ['Admin'] },
         { icon: Layers,   label: 'Framework',               path: '/management/frameworks', roles: ['Admin'] },
+        { icon: Award,    label: 'Chứng chỉ',               path: '/management/certificates', roles: ['Admin'] },
     ];
 
     // Guest (chưa đăng nhập) → role = '' → map sang 'Guest'

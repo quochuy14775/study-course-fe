@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { showToast } from '../../../../components/CustomToast';
-import { ChevronLeft, Settings, BookOpen, Loader2, Eye } from 'lucide-react';
+import { ChevronLeft, Settings, BookOpen, Loader2, Eye, Award } from 'lucide-react';
 import lessonService from '../../../../services/lessonService';
 import courseService from '../../../../services/courseServices';
 import { Lesson, LessonRequest } from '../../../../types/lesson';
 import LessonFormDialog from './LessonFormDialog';
 import DeleteLessonDialog from './DeleteLessonDialog';
 import CurriculumBuilder from './CurriculumBuilder';
+import QuizFormDialog from './QuizFormDialog';
 
 interface LocationState {
     courseTitle?: string;
@@ -38,6 +39,8 @@ const LessonManagement: React.FC = () => {
     const [editing, setEditing] = useState<Lesson | null>(null);
     const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
     const [tab, setTab] = useState<Tab>('curriculum');
+    /** Lesson đang soạn quiz; 'course-test' = đang soạn bài test cuối khóa */
+    const [quizTarget, setQuizTarget] = useState<Lesson | 'course-test' | null>(null);
 
     /* Fetch course + lessons */
     useEffect(() => {
@@ -237,14 +240,32 @@ const LessonManagement: React.FC = () => {
                         <p className="text-sm text-ink-500">Đang tải dữ liệu...</p>
                     </div>
                 ) : tab === 'curriculum' ? (
-                    <div className="animate-fade-in">
+                    <div className="animate-fade-in space-y-4">
                         <CurriculumBuilder
                             courseId={Number(courseId)}
                             lessons={lessons}
                             onAddLesson={openCreate}
                             onEditLesson={openEdit}
                             onDeleteLesson={(id) => setDeletingLesson(lessons.find(l => l.id === id) ?? null)}
+                            onEditQuiz={(lesson) => setQuizTarget(lesson)}
                         />
+
+                        <button
+                            onClick={() => setQuizTarget('course-test')}
+                            className="w-full flex items-center gap-3 px-4 py-3.5 bg-white border border-ink-200 rounded-2xl shadow-soft hover:border-amber-300 hover:shadow-soft-lg transition-all text-left group"
+                        >
+                            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 flex-shrink-0">
+                                <Award size={18} />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-ink-900 group-hover:text-amber-700 transition-colors">
+                                    Bài test cuối khóa
+                                </p>
+                                <p className="text-xs text-ink-500 mt-0.5">
+                                    Học viên phải đạt bài test này để hoàn thành khóa và nhận chứng chỉ
+                                </p>
+                            </div>
+                        </button>
                     </div>
                 ) : (
                     <div className="bg-white border border-ink-200 rounded-2xl p-6 shadow-soft animate-fade-in">
@@ -276,6 +297,20 @@ const LessonManagement: React.FC = () => {
                     onClose={() => setDeletingLesson(null)}
                     onConfirm={handleDelete}
                 />
+
+                {quizTarget && (
+                    <QuizFormDialog
+                        open
+                        onClose={() => setQuizTarget(null)}
+                        courseId={Number(courseId)}
+                        lessonId={quizTarget === 'course-test' ? undefined : quizTarget.id}
+                        defaultTitle={
+                            quizTarget === 'course-test'
+                                ? `Bài test tổng kết khóa: ${course?.title ?? ''}`
+                                : `Kiểm tra: ${quizTarget.title}`
+                        }
+                    />
+                )}
             </div>
         </div>
     );
