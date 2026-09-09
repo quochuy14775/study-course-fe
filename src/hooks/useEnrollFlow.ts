@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { showToast } from '../components/CustomToast';
 import enrollmentService from '../services/enrollmentService';
 import type { Course } from '../types/course';
 import type { Enrollment } from '../types/enrollment';
@@ -39,7 +39,7 @@ export const useEnrollFlow = (onEnrolled?: (enrollment: Enrollment) => void) => 
             // Không điều hướng khi enroll hỏng — nếu không khóa học sẽ không bao giờ
             // xuất hiện trong "Khóa học của tôi" mà user không hay biết.
             console.error(e);
-            toast.error(e?.response?.data?.message ?? 'Không thể đăng ký khóa học. Vui lòng thử lại.');
+            showToast.error(e?.response?.data?.message ?? 'Không thể đăng ký khóa học. Vui lòng thử lại.');
         } finally {
             setEnrolling(false);
         }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Award, Download, Share2, Link2, ShieldCheck, Lock } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { showToast } from '../../components/CustomToast';
 import certificateService from '../../services/certificateService';
 import type { Certificate } from '../../types/certificate';
 
@@ -22,7 +22,7 @@ const CertificatePage: React.FC = () => {
             .finally(() => setLoading(false));
     }, [courseId]);
 
-    const notReady = () => toast.info('Tính năng tải PDF / chia sẻ sẽ có trong bản cập nhật tới.');
+    const notReady = () => showToast.info('Tính năng tải PDF / chia sẻ sẽ có trong bản cập nhật tới.');
 
     if (loading) return (
         <div className="flex items-center justify-center min-h-[60vh]">

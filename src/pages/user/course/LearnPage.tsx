@@ -7,7 +7,7 @@ import {
     MessageSquare, HelpCircle, Send, ThumbsUp, ChevronRight,
     Sparkles, BookMarked, Lock,
 } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { showToast } from '../../../components/CustomToast';
 import NotePanel from './NotePanel';
 import QuizPanel from './QuizPanel';
 import CourseTestCard from './CourseTestCard';
@@ -573,10 +573,10 @@ const LearnPage: React.FC = () => {
             .then(() => refreshCourseTest())
             .catch((e) => {
                 console.error(e);
-                toast.error('Không thể lưu tiến độ. Vui lòng thử lại.');
+                showToast.error('Không thể lưu tiến độ. Vui lòng thử lại.');
             });
         if (lessonQuiz && !quizPassed.has(lessonId)) {
-            toast.info('Hoàn thành quiz cuối bài để mở khóa bài tiếp theo.');
+            showToast.info('Hoàn thành quiz cuối bài để mở khóa bài tiếp theo.');
             openQuiz(lessonId);
             return;
         }
@@ -586,7 +586,7 @@ const LearnPage: React.FC = () => {
     const goNext = () => {
         if (!nextLesson || !currentLesson) return;
         if (lessonQuiz && !quizPassed.has(currentLesson.id)) {
-            toast.info('Hoàn thành quiz cuối bài để mở khóa bài tiếp theo.');
+            showToast.info('Hoàn thành quiz cuối bài để mở khóa bài tiếp theo.');
             openQuiz(currentLesson.id);
             return;
         }
@@ -604,7 +604,7 @@ const LearnPage: React.FC = () => {
         setViewingQuizFor(null);
         quizService.getCourseTestToTake(Number(courseId))
             .then((q) => { setCourseTestQuiz(q); setTakingCourseTest(true); })
-            .catch((e) => { console.error(e); toast.error('Bài test đang bị khóa hoặc chưa sẵn sàng.'); });
+            .catch((e) => { console.error(e); showToast.error('Bài test đang bị khóa hoặc chưa sẵn sàng.'); });
     };
 
     const toggleChapter = (key: string) =>
@@ -624,7 +624,7 @@ const LearnPage: React.FC = () => {
             setComments((prev) => [{ ...c, author: resolveAuthor(c.author) }, ...prev]);
         } catch (e) {
             console.error(e);
-            toast.error('Không thể gửi bình luận. Vui lòng thử lại.');
+            showToast.error('Không thể gửi bình luận. Vui lòng thử lại.');
         }
     };
 
@@ -635,7 +635,7 @@ const LearnPage: React.FC = () => {
             setQaList((prev) => [{ ...q, author: resolveAuthor(q.author) }, ...prev]);
         } catch (e) {
             console.error(e);
-            toast.error('Không thể gửi câu hỏi. Vui lòng thử lại.');
+            showToast.error('Không thể gửi câu hỏi. Vui lòng thử lại.');
         }
     };
 
@@ -677,7 +677,7 @@ const LearnPage: React.FC = () => {
             );
         } catch (e) {
             console.error(e);
-            toast.error('Không thể gửi trả lời. Vui lòng thử lại.');
+            showToast.error('Không thể gửi trả lời. Vui lòng thử lại.');
         }
     }, [currentLesson, resolveAuthor]);
 

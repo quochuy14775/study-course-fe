@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { showToast } from '../../../components/CustomToast';
 import { Star, Clock, BookOpen, Heart, ArrowRight, Crown, Zap } from 'lucide-react';
 import AuthGuardModal from '../../../components/AuthGuardModal';
 import EnrollConfirmModal from '../../../components/EnrollConfirmModal';
@@ -49,7 +49,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
             await enrollmentService.enroll(course.id);
         } catch (e) {
             console.error(e);
-            toast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
+            showToast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
         }
     };
 

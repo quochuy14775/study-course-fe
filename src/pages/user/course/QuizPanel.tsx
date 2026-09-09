@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     HelpCircle, Clock, CheckCircle2, XCircle, RotateCcw, ArrowRight, ListChecks,
 } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { showToast } from '../../../components/CustomToast';
 import quizService from '../../../services/quizService';
 import type { Quiz, QuizAttemptResult } from '../../../types/quiz';
 
@@ -48,7 +48,7 @@ const QuizPanel: React.FC<Props> = ({ quiz, onPassed, onFinish, onNext }) => {
             onFinish?.(attemptResult);
         } catch (e) {
             console.error(e);
-            toast.error('Không thể nộp bài. Vui lòng thử lại.');
+            showToast.error('Không thể nộp bài. Vui lòng thử lại.');
         } finally {
             setSubmitting(false);
         }

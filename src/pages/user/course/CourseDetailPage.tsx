@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
     Star, Clock, BookOpen, ArrowRight, ArrowLeft, ThumbsUp, ShieldCheck, MessageSquare, Send,
 } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { showToast } from '../../../components/CustomToast';
 import courseService from '../../../services/courseServices';
 import reviewService from '../../../services/reviewService';
 import enrollmentService from '../../../services/enrollmentService';
@@ -278,7 +278,7 @@ const CourseDetailPage: React.FC = () => {
             setEnrollment(await enrollmentService.enroll(Number(courseId)));
         } catch (e) {
             console.error(e);
-            toast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng thử lại.');
+            showToast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng thử lại.');
         }
     };
 
@@ -300,7 +300,7 @@ const CourseDetailPage: React.FC = () => {
             reviewService.getSummary(Number(courseId)).then(setBreakdown).catch((e) => console.error(e));
         } catch (e: any) {
             const msg = e?.response?.data?.errors?.courseId ?? 'Không thể gửi đánh giá. Vui lòng thử lại.';
-            toast.error(msg);
+            showToast.error(msg);
         }
     };
 
@@ -314,7 +314,7 @@ const CourseDetailPage: React.FC = () => {
             ));
         } catch (e) {
             console.error(e);
-            toast.error('Không thể gửi trả lời. Vui lòng thử lại.');
+            showToast.error('Không thể gửi trả lời. Vui lòng thử lại.');
         }
     };
 

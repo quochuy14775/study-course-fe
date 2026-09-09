@@ -6,7 +6,7 @@ import {
     User, Eye, ThumbsUp, Star, ArrowRight,
     Search, Inbox,
 } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { showToast } from '../components/CustomToast';
 import courseService from '../services/courseServices';
 import enrollmentService from '../services/enrollmentService';
 import EnrollConfirmModal from '../components/EnrollConfirmModal';
@@ -108,7 +108,7 @@ const SavedCourseCard: React.FC<{
             await enrollmentService.enroll(course.id);
         } catch (e) {
             console.error(e);
-            toast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
+            showToast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
         }
     };
 
