@@ -6,8 +6,9 @@ import {
     TrendingUp, Flame, Star, Award,
     Search, Filter, ArrowRight,
 } from 'lucide-react';
-import courseService from '../../../services/courseServices';
+import enrollmentService from '../../../services/enrollmentService';
 import { Course, formatDurationSeconds } from '../../../types/course';
+import type { EnrolledCourse } from '../../../types/enrollment';
 
 // ── Animation variants (mirror PersonalPage) ─────────────────────────────────
 
@@ -45,12 +46,6 @@ const THUMBNAIL_GRADIENTS = [
     { from: '#f59e0b', to: '#f97316' },
     { from: '#06b6d4', to: '#3b82f6' },
 ];
-
-// Mock progress per course id (until enrollment API is ready)
-const mockProgress = (id: number) => {
-    const seed = (id * 137 + 29) % 100;
-    return seed;
-};
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -106,11 +101,12 @@ const StatCard: React.FC<StatItem> = ({ icon: Icon, label, value, color, bg }) =
 
 // ── Course card (my-courses variant with progress) ────────────────────────────
 
-const MyCourseCard: React.FC<{ course: Course; progress: number }> = ({ course, progress }) => {
+const MyCourseCard: React.FC<{ course: Course; progress: number; isCompleted: boolean }> = ({
+    course, progress, isCompleted,
+}) => {
     const navigate = useNavigate();
     const g = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
     const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
-    const isCompleted = progress === 100;
     const duration = formatDurationSeconds(course.totalDurationSeconds);
 
     return (
@@ -269,39 +265,45 @@ const MyCourseCard: React.FC<{ course: Course; progress: number }> = ({ course, 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const MyCoursesPage: React.FC = () => {
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [enrollments, setEnrollments] = useState<EnrolledCourse[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<FilterTab>('all');
     const [search, setSearch] = useState('');
 
     useEffect(() => {
         let mounted = true;
-        courseService.getCourses({ count: true, top: 20 })
-            .then((res) => { if (mounted) setCourses(res.value ?? []); })
-            .catch(() => { if (mounted) setCourses([]); })
+        enrollmentService.getMyCourses()
+            .then((res) => { if (mounted) setEnrollments(res ?? []); })
+            .catch(() => { if (mounted) setEnrollments([]); })
             .finally(() => { if (mounted) setLoading(false); });
         return () => { mounted = false; };
     }, []);
 
     const withProgress = useMemo(
-        () => courses.map((c) => ({ course: c, progress: mockProgress(c.id) })),
-        [courses],
+        () => enrollments.map((e) => ({
+            course: e.course,
+            progress: Math.round(e.progress),
+            // "Hoàn thành" bám theo cờ của BE (chỉ bật khi đã pass course test), không phải
+            // progress === 100 — xem hết bài mà chưa thi thì vẫn đang học.
+            isCompleted: e.isCompleted,
+        })),
+        [enrollments],
     );
 
     const filtered = useMemo(() => {
         let list = withProgress;
-        if (tab === 'inprogress') list = list.filter((x) => x.progress > 0 && x.progress < 100);
-        if (tab === 'completed')  list = list.filter((x) => x.progress === 100);
+        if (tab === 'inprogress') list = list.filter((x) => !x.isCompleted);
+        if (tab === 'completed')  list = list.filter((x) => x.isCompleted);
         if (search.trim()) list = list.filter((x) => x.course.title.toLowerCase().includes(search.toLowerCase()));
         return list;
     }, [withProgress, tab, search]);
 
     const stats = useMemo(() => ({
         total:      withProgress.length,
-        inprogress: withProgress.filter((x) => x.progress > 0 && x.progress < 100).length,
-        completed:  withProgress.filter((x) => x.progress === 100).length,
-        hours:      Math.round(courses.reduce((s, c) => s + c.totalDurationSeconds, 0) / 3600),
-    }), [withProgress, courses]);
+        inprogress: withProgress.filter((x) => !x.isCompleted).length,
+        completed:  withProgress.filter((x) => x.isCompleted).length,
+        hours:      Math.round(enrollments.reduce((s, e) => s + e.course.totalDurationSeconds, 0) / 3600),
+    }), [withProgress, enrollments]);
 
     const TABS: { key: FilterTab; label: string; count: number }[] = [
         { key: 'all',        label: 'Tất cả',      count: stats.total },
@@ -457,8 +459,13 @@ const MyCoursesPage: React.FC = () => {
                             animate="show"
                             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
                         >
-                            {filtered.map(({ course, progress }) => (
-                                <MyCourseCard key={course.id} course={course} progress={progress} />
+                            {filtered.map(({ course, progress, isCompleted }) => (
+                                <MyCourseCard
+                                    key={course.id}
+                                    course={course}
+                                    progress={progress}
+                                    isCompleted={isCompleted}
+                                />
                             ))}
                         </motion.div>
                     </AnimatePresence>

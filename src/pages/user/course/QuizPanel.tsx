@@ -11,9 +11,14 @@ interface Props {
     quiz: Quiz;
     onPassed?: () => void;
     onFinish?: (result: QuizAttemptResult) => void;
+    /**
+     * Sang bài kế tiếp sau khi pass. Không truyền (bài cuối, hoặc course test — vốn không có
+     * "bài tiếp theo") thì nút sẽ được ẩn thay vì hiện ra rồi bấm không ăn.
+     */
+    onNext?: () => void;
 }
 
-const QuizPanel: React.FC<Props> = ({ quiz, onPassed, onFinish }) => {
+const QuizPanel: React.FC<Props> = ({ quiz, onPassed, onFinish, onNext }) => {
     const [step, setStep] = useState(0); // câu hỏi hiện tại
     const [answers, setAnswers] = useState<Record<number, number>>({}); // questionId -> optionId
     const [submitting, setSubmitting] = useState(false);
@@ -82,9 +87,14 @@ const QuizPanel: React.FC<Props> = ({ quiz, onPassed, onFinish }) => {
                             <ListChecks className="w-3.5 h-3.5" /> Xem lại đáp án
                         </button>
                         {result.isPassed ? (
-                            <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-colors">
-                                Học bài tiếp theo <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
+                            onNext && (
+                                <button
+                                    onClick={onNext}
+                                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-colors"
+                                >
+                                    Học bài tiếp theo <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                            )
                         ) : (
                             <button
                                 onClick={retake}

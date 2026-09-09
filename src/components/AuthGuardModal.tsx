@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, UserPlus, X, BookOpen, Map, Star } from 'lucide-react';
@@ -24,7 +25,11 @@ const AuthGuardModal: React.FC<AuthGuardModalProps> = ({
     const goLogin  = () => { onClose(); navigate('/login');  };
     const goSignup = () => { onClose(); navigate('/signup'); };
 
-    return (
+    // Portal thẳng ra body: nơi gọi modal này (course card) thường nằm trong 1 motion.div
+    // có whileHover (Framer Motion set transform) + overflow-hidden — `fixed` bên trong
+    // ancestor có transform bị nhốt trong ancestor đó thay vì phủ viewport, nên dialog sẽ
+    // bị cắt gọn trong khung card thay vì che kín màn hình.
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
                 <motion.div
@@ -136,7 +141,8 @@ const AuthGuardModal: React.FC<AuthGuardModalProps> = ({
                     </motion.div>
                 </motion.div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
     );
 };
 

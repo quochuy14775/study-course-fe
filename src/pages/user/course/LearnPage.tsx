@@ -945,7 +945,11 @@ const LearnPage: React.FC = () => {
                                 >
                                     <ArrowLeft className="w-3.5 h-3.5" /> Quay lại bài học
                                 </button>
-                                <QuizPanel quiz={lessonQuiz} onPassed={passQuiz} />
+                                <QuizPanel
+                                    quiz={lessonQuiz}
+                                    onPassed={passQuiz}
+                                    onNext={nextLesson ? () => goToLesson(nextLesson.id) : undefined}
+                                />
                             </motion.div>
                           ) : (<>
 

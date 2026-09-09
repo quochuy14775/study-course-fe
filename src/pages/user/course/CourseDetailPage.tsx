@@ -7,11 +7,16 @@ import {
 import { toast } from 'react-toastify';
 import courseService from '../../../services/courseServices';
 import reviewService from '../../../services/reviewService';
+import enrollmentService from '../../../services/enrollmentService';
 import { useAuthGuard } from '../../../hooks/useAuthGuard';
+import { useEnrollFlow } from '../../../hooks/useEnrollFlow';
+import { useAuthStore } from '../../../stores/authStore';
 import AuthGuardModal from '../../../components/AuthGuardModal';
 import CheckoutModal from '../../../components/CheckoutModal';
+import EnrollConfirmModal from '../../../components/EnrollConfirmModal';
 import { Course, formatDurationSeconds } from '../../../types/course';
 import type { CourseReview, RatingBreakdown } from '../../../types/review';
+import type { Enrollment } from '../../../types/enrollment';
 
 const emptyBreakdown: RatingBreakdown = {
     average: 0,
@@ -203,13 +208,15 @@ const CourseDetailPage: React.FC = () => {
     const { courseId } = useParams<{ courseId: string }>();
     const navigate = useNavigate();
     const { guardOpen, guardAction, closeGuard, requireAuth } = useAuthGuard();
+    const user = useAuthStore((s) => s.user);
 
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     const [reviews, setReviews] = useState<CourseReview[]>([]);
     const [breakdown, setBreakdown] = useState<RatingBreakdown>(emptyBreakdown);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
-    const [purchased, setPurchased] = useState(false);
+    const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+    const { pendingCourse, enrolling, requestEnroll, cancelEnroll, confirmEnroll } = useEnrollFlow(setEnrollment);
 
     useEffect(() => {
         if (!courseId) return;
@@ -236,7 +243,44 @@ const CourseDetailPage: React.FC = () => {
 
     useEffect(() => { loadReviews(); }, [loadReviews]);
 
+    // Đã đăng ký hay chưa quyết định nhãn nút + có phải qua checkout không.
+    // Endpoint cần auth nên khách vãng lai bỏ qua, họ sẽ bị AuthGuardModal chặn khi bấm.
+    useEffect(() => {
+        if (!courseId || !user) { setEnrollment(null); return; }
+        let mounted = true;
+        enrollmentService.getEnrollment(Number(courseId))
+            .then((e) => { if (mounted) setEnrollment(e); })
+            .catch((e) => console.error(e));
+        return () => { mounted = false; };
+    }, [courseId, user]);
+
     const isPro = (course?.price ?? 0) > 0;
+    const isEnrolled = enrollment !== null;
+
+    /**
+     * Đã ghi danh → vào học thẳng.
+     * Chưa ghi danh + có phí → CheckoutModal.
+     * Chưa ghi danh + miễn phí → dialog xác nhận (ghi danh là hành động có chủ đích, không tự động).
+     */
+    const handleCta = () => requireAuth(
+        () => {
+            if (isEnrolled) { navigate(`/courses/${courseId}/learn`); return; }
+            if (isPro) { setCheckoutOpen(true); return; }
+            if (course) requestEnroll(course);
+        },
+        `${isPro ? 'mua' : 'đăng ký'} khóa học "${course?.title}"`,
+    );
+
+    /** Thanh toán hiện là mock; ghi danh mới là thứ thật sự được lưu xuống DB. */
+    const handleCheckoutSuccess = async () => {
+        if (!courseId) return;
+        try {
+            setEnrollment(await enrollmentService.enroll(Number(courseId)));
+        } catch (e) {
+            console.error(e);
+            toast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng thử lại.');
+        }
+    };
 
     const toggleHelpful = async (id: number) => {
         if (!courseId) return;
@@ -319,14 +363,20 @@ const CourseDetailPage: React.FC = () => {
                         </span>
                         <motion.button
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => requireAuth(
-                                () => (isPro && !purchased) ? setCheckoutOpen(true) : navigate(`/courses/${courseId}/learn`),
-                                `${isPro ? 'mua' : 'học'} khóa học "${course?.title}"`
-                            )}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-primary-600 hover:bg-primary-500 shadow-sm transition-all"
+                            onClick={handleCta}
+                            disabled={enrolling}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-primary-600 hover:bg-primary-500 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                         >
-                            {isPro && !purchased ? 'Mua ngay' : 'Học ngay'} <ArrowRight className="w-3.5 h-3.5" />
+                            {isEnrolled
+                                ? (enrollment!.progress > 0 ? 'Tiếp tục học' : 'Vào học')
+                                : (isPro ? 'Mua ngay' : 'Đăng ký khóa học')}
+                            <ArrowRight className="w-3.5 h-3.5" />
                         </motion.button>
+                        {isEnrolled && enrollment!.progress > 0 && (
+                            <span className="text-[11px] font-medium text-primary-600">
+                                Đã học {Math.round(enrollment!.progress)}%
+                            </span>
+                        )}
                         <span className="flex items-center gap-1 text-[11px] text-ink-400">
                             <ShieldCheck className="w-3 h-3" /> Học không giới hạn thời gian
                         </span>
@@ -338,7 +388,14 @@ const CourseDetailPage: React.FC = () => {
                     onClose={() => setCheckoutOpen(false)}
                     title={course?.title ?? 'Khóa học'}
                     price={course?.price ?? 0}
-                    onSuccess={() => setPurchased(true)}
+                    onSuccess={handleCheckoutSuccess}
+                    onEnterCourse={() => navigate(`/courses/${courseId}/learn`)}
+                />
+                <EnrollConfirmModal
+                    course={pendingCourse}
+                    loading={enrolling}
+                    onCancel={cancelEnroll}
+                    onConfirm={confirmEnroll}
                 />
             </div>
 

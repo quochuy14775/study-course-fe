@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { Star, Clock, BookOpen, Heart, ArrowRight, Crown, Zap } from 'lucide-react';
 import AuthGuardModal from '../../../components/AuthGuardModal';
+import EnrollConfirmModal from '../../../components/EnrollConfirmModal';
+import CheckoutModal from '../../../components/CheckoutModal';
+import enrollmentService from '../../../services/enrollmentService';
 import { useAuthGuard } from '../../../hooks/useAuthGuard';
+import { useEnrollFlow } from '../../../hooks/useEnrollFlow';
 import { Course, formatDurationSeconds } from '../../../types/course';
 
 interface CourseCardProps {
@@ -30,11 +35,23 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
     const [wishlisted, setWishlisted] = useState(false);
     const navigate = useNavigate();
     const { guardOpen, guardAction, closeGuard, requireAuth } = useAuthGuard();
+    const { pendingCourse, enrolling, requestEnroll, cancelEnroll, confirmEnroll } = useEnrollFlow();
+    const [checkoutOpen, setCheckoutOpen] = useState(false);
 
     const g = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
     const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
     const duration = formatDurationSeconds(course.totalDurationSeconds);
     const isPro = variant === 'pro';
+
+    /** Thanh toán hiện là mock; ghi danh mới là thứ thật sự được lưu xuống DB. */
+    const handleCheckoutSuccess = async () => {
+        try {
+            await enrollmentService.enroll(course.id);
+        } catch (e) {
+            console.error(e);
+            toast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
+        }
+    };
 
     return (
         <motion.div
@@ -209,8 +226,9 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
                     </div>
                     <motion.button
                         onClick={() => requireAuth(
-                            () => navigate(`/courses/${course.id}/learn`),
-                            `${isPro ? 'mua' : 'học'} khóa học "${course.title}"`
+                            // Khóa miễn phí đi qua dialog xác nhận; khóa có phí phải qua checkout trước.
+                            () => isPro ? setCheckoutOpen(true) : requestEnroll(course),
+                            `${isPro ? 'mua' : 'đăng ký'} khóa học "${course.title}"`
                         )}
                         whileTap={{ scale: 0.95 }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
@@ -219,7 +237,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
                                 : 'bg-primary-600 text-white hover:bg-primary-700 hover:shadow-md hover:shadow-primary-600/30'
                         }`}
                     >
-                        {isPro ? 'Mua ngay' : 'Học ngay'}
+                        {isPro ? 'Mua ngay' : 'Đăng ký học'}
                         <ArrowRight className="w-3 h-3" />
                     </motion.button>
 
@@ -227,6 +245,20 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
                         isOpen={guardOpen}
                         onClose={closeGuard}
                         action={guardAction}
+                    />
+                    <EnrollConfirmModal
+                        course={pendingCourse}
+                        loading={enrolling}
+                        onCancel={cancelEnroll}
+                        onConfirm={confirmEnroll}
+                    />
+                    <CheckoutModal
+                        isOpen={checkoutOpen}
+                        onClose={() => setCheckoutOpen(false)}
+                        title={course.title}
+                        price={course.price}
+                        onSuccess={handleCheckoutSuccess}
+                        onEnterCourse={() => navigate(`/courses/${course.id}/learn`)}
                     />
                 </div>
             </div>

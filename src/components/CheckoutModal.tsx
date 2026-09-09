@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CreditCard, CheckCircle2, ShieldCheck, Loader2 } from 'lucide-react';
 import { paymentMethods } from '../mockDatas/paymentMock';
@@ -9,11 +10,14 @@ interface Props {
     onClose: () => void;
     title: string;
     price: number;
+    /** Gọi ngay khi thanh toán xong (trước khi user thấy màn hình success) — dùng để ghi danh. */
     onSuccess?: () => void;
+    /** Bấm "Vào học ngay" ở màn hình success. Không truyền thì nút chỉ đóng modal. */
+    onEnterCourse?: () => void;
 }
 
 /** MOCK: không gọi cổng thanh toán thật — chỉ mô phỏng luồng UI để xem giao diện */
-const CheckoutModal: React.FC<Props> = ({ isOpen, onClose, title, price, onSuccess }) => {
+const CheckoutModal: React.FC<Props> = ({ isOpen, onClose, title, price, onSuccess, onEnterCourse }) => {
     const [method, setMethod] = useState<PaymentMethodId>('card');
     const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
 
@@ -28,7 +32,10 @@ const CheckoutModal: React.FC<Props> = ({ isOpen, onClose, title, price, onSucce
         }, 1200);
     };
 
-    return (
+    // Portal thẳng ra body — modal này sẽ được gọi từ trong course card (motion.div có
+    // whileHover/overflow-hidden), `fixed` bên trong ancestor có transform bị nhốt trong
+    // ancestor đó thay vì phủ viewport nếu không portal ra ngoài.
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
                 <motion.div
@@ -62,7 +69,7 @@ const CheckoutModal: React.FC<Props> = ({ isOpen, onClose, title, price, onSucce
                                     Bạn đã mở khóa <span className="font-medium text-ink-700">{title}</span>. Hóa đơn đã được gửi qua email.
                                 </p>
                                 <button
-                                    onClick={close}
+                                    onClick={() => { close(); onEnterCourse?.(); }}
                                     className="w-full mt-6 py-3 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm transition-all"
                                 >
                                     Vào học ngay
@@ -134,7 +141,8 @@ const CheckoutModal: React.FC<Props> = ({ isOpen, onClose, title, price, onSucce
                     </motion.div>
                 </motion.div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
     );
 };
 

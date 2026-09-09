@@ -6,7 +6,12 @@ import {
     User, Eye, ThumbsUp, Star, ArrowRight,
     Search, Inbox,
 } from 'lucide-react';
+import { toast } from 'react-toastify';
 import courseService from '../services/courseServices';
+import enrollmentService from '../services/enrollmentService';
+import EnrollConfirmModal from '../components/EnrollConfirmModal';
+import CheckoutModal from '../components/CheckoutModal';
+import { useEnrollFlow } from '../hooks/useEnrollFlow';
 import { Course, formatDurationSeconds } from '../types/course';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -92,8 +97,20 @@ const SavedCourseCard: React.FC<{
     onUnsave: (id: number) => void;
 }> = ({ course, onUnsave }) => {
     const navigate = useNavigate();
+    const { pendingCourse, enrolling, requestEnroll, cancelEnroll, confirmEnroll } = useEnrollFlow();
+    const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [from, to] = GRADIENTS[course.id % GRADIENTS.length];
     const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
+
+    /** Thanh toán hiện là mock; ghi danh mới là thứ thật sự được lưu xuống DB. */
+    const handleCheckoutSuccess = async () => {
+        try {
+            await enrollmentService.enroll(course.id);
+        } catch (e) {
+            console.error(e);
+            toast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
+        }
+    };
 
     return (
         <motion.div
@@ -157,11 +174,30 @@ const SavedCourseCard: React.FC<{
                     </span>
                     <motion.button
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => navigate(`/courses/${course.id}/learn`)}
+                        // Khóa miễn phí đi qua dialog xác nhận; khóa có phí phải qua checkout trước.
+                        onClick={() => course.price === 0
+                            ? requestEnroll(course)
+                            : setCheckoutOpen(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:brightness-105 transition-all"
                     >
-                        <PlayCircle className="w-3.5 h-3.5" /> Học ngay
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        {course.price === 0 ? 'Đăng ký học' : 'Mua ngay'}
                     </motion.button>
+
+                    <EnrollConfirmModal
+                        course={pendingCourse}
+                        loading={enrolling}
+                        onCancel={cancelEnroll}
+                        onConfirm={confirmEnroll}
+                    />
+                    <CheckoutModal
+                        isOpen={checkoutOpen}
+                        onClose={() => setCheckoutOpen(false)}
+                        title={course.title}
+                        price={course.price}
+                        onSuccess={handleCheckoutSuccess}
+                        onEnterCourse={() => navigate(`/courses/${course.id}/learn`)}
+                    />
                 </div>
             </div>
         </motion.div>
