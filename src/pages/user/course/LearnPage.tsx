@@ -529,7 +529,7 @@ const LearnPage: React.FC = () => {
             .then((q) => { if (!cancelled) setLessonQuiz(q); })
             .catch(() => { if (!cancelled) setLessonQuiz(null); });
         return () => { cancelled = true; };
-    }, [currentLesson?.id]);
+    }, [currentLesson?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const refreshCourseTest = useCallback(() => {
         if (!courseId) return;
