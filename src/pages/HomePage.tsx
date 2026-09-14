@@ -79,7 +79,7 @@ const HomePage: React.FC = () => {
                 transition={{ duration: 26, ease: 'easeInOut', repeat: Infinity, delay: 4 }}
             />
 
-            <div className="relative max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <div className="relative max-w-[1900px] mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
 
                 {/* ── Hero Carousel ─────────────────────────────── */}
                 <motion.section

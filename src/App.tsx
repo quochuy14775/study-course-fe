@@ -10,6 +10,7 @@ import PersonalPage from './pages/PersonalPage';
 import AuthPage from './components/AuthPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SetupAccountPage from './pages/SetupAccountPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import CourseManagement from "./pages/admin/course";
 import LanguageManagement from "./pages/admin/language";
 import FrameworkManagement from "./pages/admin/framework";
@@ -139,6 +140,7 @@ function App() {
                 <Route path="/signup" element={<AuthPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/setup-account" element={<SetupAccountPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 {/* Full-screen learn page — no Header/Sidebar */}
                 <Route

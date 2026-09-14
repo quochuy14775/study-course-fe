@@ -2,7 +2,7 @@ import axios from 'axios';
 import {useAuthStore} from "../stores/authStore";
 
 const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL,
+    baseURL: process.env.REACT_APP_API_URL = "http://localhost:8080/api" ,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -16,5 +16,16 @@ api.interceptors.request.use((config) => {
     }
     return config;
 });
+
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        // token bị server từ chối (hết hạn/không hợp lệ) -> clear store để navbar/notification đồng bộ
+        if (error.response?.status === 401 && useAuthStore.getState().token) {
+            useAuthStore.getState().logout();
+        }
+        return Promise.reject(error);
+    },
+);
 
 export default api;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import {useAuthStore} from "../stores/authStore";
 
@@ -9,14 +9,18 @@ interface Props {
 
 const ProtectedRoute: React.FC<Props> = ({ children, allowedRoles }) => {
     const user = useAuthStore((state) => state.user);
+    const logout = useAuthStore((state) => state.logout);
+    const isExpired = !!user && user.exp * 1000 < Date.now();
 
-    // chưa login
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
+    // token hết hạn -> clear store để navbar/notification không còn hiển thị dữ liệu cũ
+    useEffect(() => {
+        if (isExpired) {
+            logout();
+        }
+    }, [isExpired, logout]);
 
-    // check expire
-    if (user.exp * 1000 < Date.now()) {
+    // chưa login hoặc token đã hết hạn
+    if (!user || isExpired) {
         return <Navigate to="/login" replace />;
     }
 

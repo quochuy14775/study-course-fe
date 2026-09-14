@@ -12,6 +12,7 @@ import { useAuthStore } from '../stores/authStore';
  */
 export const useAuthGuard = () => {
     const user = useAuthStore((s) => s.user);
+    const logout = useAuthStore((s) => s.logout);
     const [guardOpen, setGuardOpen]     = useState(false);
     const [guardAction, setGuardAction] = useState('thực hiện hành động này');
 
@@ -21,11 +22,15 @@ export const useAuthGuard = () => {
             if (user && !isExpired) {
                 callback();
             } else {
+                // token đã hết hạn nhưng store chưa được clear -> clear ngay để navbar đồng bộ trạng thái
+                if (user && isExpired) {
+                    logout();
+                }
                 setGuardAction(action);
                 setGuardOpen(true);
             }
         },
-        [user],
+        [user, logout],
     );
 
     const closeGuard = useCallback(() => setGuardOpen(false), []);

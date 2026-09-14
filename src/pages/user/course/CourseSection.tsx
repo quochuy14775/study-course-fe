@@ -106,14 +106,14 @@ const CourseSection: React.FC<CourseSectionProps> = ({ title, subtitle, courses,
 
             {/* Cards grid */}
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
             ) : courses.length === 0 ? (
                 <div className="py-12 text-center text-sm text-ink-400">Chưa có khóa học nào.</div>
             ) : (
                 <motion.div
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
                     variants={containerVariants}
                     initial="hidden"
                     whileInView="show"

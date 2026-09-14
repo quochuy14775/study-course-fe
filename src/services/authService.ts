@@ -21,4 +21,14 @@ export const authService = {
         const response = await api.post('/Auth/setup-account', { email, username, password, fullName });
         return response.data;
     },
+
+    forgotPassword: async (email: string) => {
+        const response = await api.post('/Auth/forgot-password', { email });
+        return response.data;
+    },
+
+    resetPassword: async (email: string, otp: string, newPassword: string, confirmPassword: string) => {
+        const response = await api.post('/Auth/reset-password', { email, otp, newPassword, confirmPassword });
+        return response.data;
+    },
 };
