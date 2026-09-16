@@ -1,131 +1,152 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "../lib/cn";
 
-interface ContributionGraphProps {
-    contributions: Array<{ date: Date; count: number }>;
+export interface ContributionDay {
+    date: Date;
+    /** Tổng hoạt động — quyết định màu ô */
+    count: number;
+    lessons?: number;
+    quizzes?: number;
+    posts?: number;
+    enrollments?: number;
+    certificates?: number;
 }
 
-export const ContributionGraph: React.FC<ContributionGraphProps> = ({ contributions }) => {
-    const [hoveredCell, setHoveredCell] = useState<{ date: Date; count: number } | null>(null);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+interface ContributionGraphProps {
+    /** Tăng dần theo ngày, phần tử cuối là hôm nay */
+    contributions: ContributionDay[];
+    title?: string;
+    /** Dòng phụ bên dưới tiêu đề (vd. "128 hoạt động · 42 ngày học") */
+    subtitle?: React.ReactNode;
+    /** Nhãn "Dữ liệu mẫu" khi đang fallback */
+    badge?: React.ReactNode;
+    /** Tùy biến nội dung tooltip (mặc định: mô tả hoạt động học tập) */
+    describe?: (day: ContributionDay) => string;
+}
 
-    const getColorClass = (count: number): string => {
-        if (count === 0) return 'bg-slate-100';
-        if (count === 1) return 'bg-emerald-200';
-        if (count === 2) return 'bg-emerald-400';
-        if (count === 3) return 'bg-emerald-500';
-        return 'bg-emerald-600';
-    };
+/* Bậc màu: 0 → nền, 1 → nhạt … 4+ → đậm. Dark mode đảo chiều để ô "nhiều" sáng lên trên nền tối. */
+const LEVEL_CLASS = [
+    'bg-surface-2',
+    'bg-primary-200 dark:bg-primary-900',
+    'bg-primary-400 dark:bg-primary-700',
+    'bg-primary-600 dark:bg-primary-500',
+    'bg-primary-800 dark:bg-primary-300',
+];
+const levelOf = (count: number) => Math.min(4, Math.max(0, count));
 
-    const getContributionLevel = (count: number): string => {
-        if (count === 0) return 'No activity';
-        if (count === 1) return 'Low activity';
-        if (count === 2) return 'Moderate activity';
-        if (count === 3) return 'Good activity';
-        return 'High activity';
-    };
+const MONTHS = ['Th1', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7', 'Th8', 'Th9', 'Th10', 'Th11', 'Th12'];
+const DAY_LABELS = ['T2', 'T4', 'T6']; // chỉ hiện vài nhãn cho thoáng
 
-    /* ================= GROUP WEEKS ================= */
+const describeLearning = (d: ContributionDay): string => {
+    if (d.count === 0) return 'Không có hoạt động';
+    const parts: string[] = [];
+    if (d.lessons) parts.push(`${d.lessons} bài học`);
+    if (d.quizzes) parts.push(`${d.quizzes} lượt quiz`);
+    if (d.posts) parts.push(`${d.posts} ghi chú/thảo luận`);
+    if (d.enrollments) parts.push(`${d.enrollments} ghi danh`);
+    if (d.certificates) parts.push(`${d.certificates} chứng chỉ`);
+    return parts.length ? parts.join(' · ') : `${d.count} hoạt động`;
+};
 
-    const weeks: Array<Array<{ date: Date; count: number }>> = [];
-    let currentWeek: Array<{ date: Date; count: number }> = [];
+export const ContributionGraph: React.FC<ContributionGraphProps> = ({
+    contributions,
+    title = 'Hoạt động học tập — 365 ngày',
+    subtitle,
+    badge,
+    describe = describeLearning,
+}) => {
+    const [hovered, setHovered] = useState<ContributionDay | null>(null);
+    const [mouse, setMouse] = useState({ x: 0, y: 0 });
 
-    contributions.forEach((c, i) => {
-        currentWeek.push(c);
-        if (currentWeek.length === 7 || i === contributions.length - 1) {
-            weeks.push([...currentWeek]);
-            currentWeek = [];
-        }
-    });
+    /* Gom 7 ngày một cột, canh cột đầu theo thứ trong tuần (T2 = hàng 0) để nhãn T2/T4/T6 đúng hàng */
+    const weeks = useMemo(() => {
+        if (contributions.length === 0) return [] as Array<Array<ContributionDay | null>>;
+        const firstDow = (contributions[0].date.getDay() + 6) % 7; // 0 = T2 … 6 = CN
+        const cells: Array<ContributionDay | null> = [...Array<null>(firstDow).fill(null), ...contributions];
+        const out: Array<Array<ContributionDay | null>> = [];
+        for (let i = 0; i < cells.length; i += 7) out.push(cells.slice(i, i + 7));
+        return out;
+    }, [contributions]);
 
-    const monthLabels: { [key: number]: string } = {
-        0: 'Jan', 1: 'Feb', 2: 'Mar', 3: 'Apr', 4: 'May', 5: 'Jun',
-        6: 'Jul', 7: 'Aug', 8: 'Sep', 9: 'Oct', 10: 'Nov', 11: 'Dec',
-    };
-
-    const dayLabels = ['Mon', 'Wed', 'Fri']; // Only showing some for cleaner look
-
-    /* ================= UI ================= */
+    const monthOf = (week: Array<ContributionDay | null>) => week.find((c) => c)?.date.getMonth();
 
     return (
-        <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Contribution — 365 Days</h3>
+        <div className="bg-surface border border-line rounded-2xl p-6 shadow-card transition-[border-color,box-shadow] duration-300 hover:border-primary-300/70 hover:shadow-card-hover dark:hover:border-primary-500/40">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                <div>
+                    <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+                        {title}
+                        {badge}
+                    </h3>
+                    {subtitle && <p className="text-xs text-fg-muted mt-1">{subtitle}</p>}
+                </div>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-medium">Less</span>
+                    <span className="text-[10px] text-fg-subtle font-medium">Ít</span>
                     <div className="flex gap-1">
-                        <div className="w-3 h-3 rounded-[2px] bg-slate-100" />
-                        <div className="w-3 h-3 rounded-[2px] bg-emerald-200" />
-                        <div className="w-3 h-3 rounded-[2px] bg-emerald-400" />
-                        <div className="w-3 h-3 rounded-[2px] bg-emerald-600" />
+                        {LEVEL_CLASS.map((c) => <div key={c} className={cn('w-3 h-3 rounded-[2px]', c)} />)}
                     </div>
-                    <span className="text-[10px] text-slate-400 font-medium">More</span>
+                    <span className="text-[10px] text-fg-subtle font-medium">Nhiều</span>
                 </div>
             </div>
 
             <div className="relative overflow-x-auto pb-2">
                 <div className="flex gap-1.5 min-w-max">
-                    {/* DAY LABELS */}
-                    <div className="flex flex-col justify-between py-6 mr-1">
-                        {dayLabels.map(day => (
-                            <span key={day} className="text-[10px] text-slate-400 h-3 flex items-center">{day}</span>
+                    {/* Nhãn thứ */}
+                    <div className="flex flex-col gap-1 pt-4 mr-1">
+                        {Array.from({ length: 7 }).map((_, i) => (
+                            <span key={i} className="text-[10px] text-fg-subtle h-3 leading-3">
+                                {i % 2 === 0 ? DAY_LABELS[i / 2] : ''}
+                            </span>
                         ))}
                     </div>
 
-                    {/* WEEKS */}
+                    {/* Tuần */}
                     <div className="flex gap-1">
-                        {weeks.map((week, wi) => (
-                            <div key={wi} className="flex flex-col gap-1">
-                                {/* MONTHS */}
-                                <div className="h-4 text-[10px] text-slate-400">
-                                    {(wi === 0 || weeks[wi - 1][0].date.getMonth() !== week[0].date.getMonth()) &&
-                                      monthLabels[week[0].date.getMonth()]
-                                    }
+                        {weeks.map((week, wi) => {
+                            const m = monthOf(week);
+                            const showMonth = m !== undefined && (wi === 0 || monthOf(weeks[wi - 1]) !== m);
+                            return (
+                                <div key={wi} className="flex flex-col gap-1">
+                                    <div className="h-3 text-[10px] leading-3 text-fg-subtle whitespace-nowrap">
+                                        {showMonth ? MONTHS[m] : ''}
+                                    </div>
+                                    {week.map((day, di) =>
+                                        day ? (
+                                            <div
+                                                key={di}
+                                                role="img"
+                                                aria-label={`${day.date.toLocaleDateString('vi-VN')}: ${describe(day)}`}
+                                                className={cn(
+                                                    'w-3 h-3 rounded-[2px] cursor-pointer transition-transform duration-150',
+                                                    'hover:scale-125 hover:ring-2 hover:ring-surface hover:z-10',
+                                                    LEVEL_CLASS[levelOf(day.count)],
+                                                )}
+                                                onMouseEnter={(e) => { setHovered(day); setMouse({ x: e.clientX, y: e.clientY }); }}
+                                                onMouseMove={(e) => setMouse({ x: e.clientX, y: e.clientY })}
+                                                onMouseLeave={() => setHovered(null)}
+                                            />
+                                        ) : (
+                                            <div key={di} className="w-3 h-3" aria-hidden />
+                                        ),
+                                    )}
                                 </div>
-
-                                {/* DAYS */}
-                                {week.map((day, di) => (
-                                    <div
-                                        key={`${wi}-${di}`}
-                                        className={`w-3 h-3 rounded-[2px] cursor-pointer transition-colors duration-200
-                                        hover:ring-1 hover:ring-slate-300
-                                        ${getColorClass(day.count)}`}
-                                        onMouseEnter={(e) => {
-                                            setHoveredCell(day);
-                                            setMousePos({ x: e.clientX, y: e.clientY });
-                                        }}
-                                        onMouseMove={(e) => {
-                                            setMousePos({ x: e.clientX, y: e.clientY });
-                                        }}
-                                        onMouseLeave={() => setHoveredCell(null)}
-                                    />
-                                ))}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* TOOLTIP */}
-                {hoveredCell && createPortal(
+                {hovered && createPortal(
                     <div
-                        className="fixed z-50 px-3 py-2 rounded-lg text-xs shadow-xl
-                        bg-slate-900 text-white border border-slate-800
-                        pointer-events-none
-                        transition-all duration-150"
-                        style={{
-                            top: mousePos.y - 50,
-                            left: mousePos.x,
-                            transform: 'translateX(-50%)'
-                        }}
+                        className="fixed z-[80] px-3 py-2 rounded-lg text-xs shadow-soft-lg pointer-events-none bg-ink-900 text-white dark:bg-ink-100 dark:text-ink-900"
+                        style={{ top: mouse.y - 52, left: mouse.x, transform: 'translateX(-50%)' }}
                     >
-                        <div className="font-medium">
-                            {hoveredCell.date instanceof Date ? hoveredCell.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : String(hoveredCell.date)}
+                        <div className="font-semibold capitalize">
+                            {hovered.date.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
                         </div>
-                        <div className="text-slate-300">
-                            {hoveredCell.count} lessons completed • {getContributionLevel(hoveredCell.count)}
-                        </div>
+                        <div className="opacity-80 mt-0.5">{describe(hovered)}</div>
                     </div>,
-                    document.body
+                    document.body,
                 )}
             </div>
         </div>

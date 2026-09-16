@@ -2,86 +2,39 @@ import { useEffect } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUiStore } from '../stores/uiStore';
 
-// Maps accent color id → Tailwind / HSL values injected as CSS vars
-const ACCENT_MAP: Record<string, Record<string, string>> = {
-    violet: {
-        '--color-primary-50':  '245 243 255',
-        '--color-primary-100': '237 233 254',
-        '--color-primary-200': '221 214 254',
-        '--color-primary-300': '196 181 253',
-        '--color-primary-400': '167 139 250',
-        '--color-primary-500': '139 92  246',
-        '--color-primary-600': '124 58  237',
-        '--color-primary-700': '109 40  217',
-        '--color-accent-400':  '192 132 252',
-        '--color-accent-500':  '168 85  247',
-        '--color-accent-600':  '147 51  234',
-    },
-    blue: {
-        '--color-primary-50':  '239 246 255',
-        '--color-primary-100': '219 234 254',
-        '--color-primary-200': '191 219 254',
-        '--color-primary-300': '147 197 253',
-        '--color-primary-400': '96  165 250',
-        '--color-primary-500': '59  130 246',
-        '--color-primary-600': '37  99  235',
-        '--color-primary-700': '29  78  216',
-        '--color-accent-400':  '129 140 248',
-        '--color-accent-500':  '99  102 241',
-        '--color-accent-600':  '79  70  229',
-    },
-    emerald: {
-        '--color-primary-50':  '236 253 245',
-        '--color-primary-100': '209 250 229',
-        '--color-primary-200': '167 243 208',
-        '--color-primary-300': '110 231 183',
-        '--color-primary-400': '52  211 153',
-        '--color-primary-500': '16  185 129',
-        '--color-primary-600': '5   150 105',
-        '--color-primary-700': '4   120 87',
-        '--color-accent-400':  '52  211 153',
-        '--color-accent-500':  '20  184 166',
-        '--color-accent-600':  '13  148 136',
-    },
-    rose: {
-        '--color-primary-50':  '255 241 242',
-        '--color-primary-100': '255 228 230',
-        '--color-primary-200': '254 205 211',
-        '--color-primary-300': '253 164 175',
-        '--color-primary-400': '251 113 133',
-        '--color-primary-500': '244 63  94',
-        '--color-primary-600': '225 29  72',
-        '--color-primary-700': '190 18  60',
-        '--color-accent-400':  '251 113 133',
-        '--color-accent-500':  '244 63  94',
-        '--color-accent-600':  '225 29  72',
-    },
-    amber: {
-        '--color-primary-50':  '255 251 235',
-        '--color-primary-100': '254 243 199',
-        '--color-primary-200': '253 230 138',
-        '--color-primary-300': '252 211 77',
-        '--color-primary-400': '251 191 36',
-        '--color-primary-500': '245 158 11',
-        '--color-primary-600': '217 119 6',
-        '--color-primary-700': '180 83  9',
-        '--color-accent-400':  '251 146 60',
-        '--color-accent-500':  '249 115 22',
-        '--color-accent-600':  '234 88  12',
-    },
-    cyan: {
-        '--color-primary-50':  '236 254 255',
-        '--color-primary-100': '207 250 254',
-        '--color-primary-200': '165 243 252',
-        '--color-primary-300': '103 232 249',
-        '--color-primary-400': '34  211 238',
-        '--color-primary-500': '6   182 212',
-        '--color-primary-600': '8   145 178',
-        '--color-primary-700': '14  116 144',
-        '--color-accent-400':  '56  189 248',
-        '--color-accent-500':  '14  165 233',
-        '--color-accent-600':  '2   132 199',
-    },
+/**
+ * Bảng màu accent. Mỗi entry ghi đè --color-primary-* và --color-accent-* (dạng "r g b")
+ * mà tailwind.config.js đọc qua rgb(var(--x) / alpha). Giá trị mặc định (khi chưa chọn)
+ * nằm ở src/index.css; entry 'violet' trùng với mặc định để không đổi diện mạo.
+ */
+type Scale = [string, string, string, string, string, string, string, string, string, string];
+
+const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
+
+// Tailwind v3 palettes, r g b
+const PALETTE: Record<string, Scale> = {
+    indigo:  ['238 242 255', '224 231 255', '199 210 254', '165 180 252', '129 140 248', '99 102 241',  '79 70 229',   '67 56 202',   '55 48 163',   '49 46 129'],
+    violet:  ['245 243 255', '237 233 254', '221 214 254', '196 181 253', '167 139 250', '139 92 246',  '124 58 237',  '109 40 217',  '91 33 182',   '76 29 149'],
+    purple:  ['250 245 255', '243 232 255', '233 213 255', '216 180 254', '192 132 252', '168 85 247',  '147 51 234',  '126 34 206',  '107 33 168',  '88 28 135'],
+    blue:    ['239 246 255', '219 234 254', '191 219 254', '147 197 253', '96 165 250',  '59 130 246',  '37 99 235',   '29 78 216',   '30 64 175',   '30 58 138'],
+    sky:     ['240 249 255', '224 242 254', '186 230 253', '125 211 252', '56 189 248',  '14 165 233',  '2 132 199',   '3 105 161',   '7 89 133',    '12 74 110'],
+    emerald: ['236 253 245', '209 250 229', '167 243 208', '110 231 183', '52 211 153',  '16 185 129',  '5 150 105',   '4 120 87',    '6 95 70',     '6 78 59'],
+    teal:    ['240 253 250', '204 251 241', '153 246 228', '94 234 212',  '45 212 191',  '20 184 166',  '13 148 136',  '15 118 110',  '17 94 89',    '19 78 74'],
+    rose:    ['255 241 242', '255 228 230', '254 205 211', '253 164 175', '251 113 133', '244 63 94',   '225 29 72',   '190 18 60',   '159 18 57',   '136 19 55'],
+    pink:    ['253 242 248', '252 231 243', '251 207 232', '249 168 212', '244 114 182', '236 72 153',  '219 39 119',  '190 24 93',   '157 23 77',   '131 24 67'],
+    amber:   ['255 251 235', '254 243 199', '253 230 138', '252 211 77',  '251 191 36',  '245 158 11',  '217 119 6',   '180 83 9',    '146 64 14',   '120 53 15'],
+    orange:  ['255 247 237', '255 237 213', '254 215 170', '253 186 116', '251 146 60',  '249 115 22',  '234 88 12',   '194 65 12',   '154 52 18',   '124 45 18'],
+    cyan:    ['236 254 255', '207 250 254', '165 243 252', '103 232 249', '34 211 238',  '6 182 212',   '8 145 178',   '14 116 144',  '21 94 117',   '22 78 99'],
+};
+
+// accent id (settingsStore) → [primary palette, accent palette]
+const ACCENT_MAP: Record<string, [string, string]> = {
+    violet:  ['indigo',  'violet'],
+    blue:    ['blue',    'indigo'],
+    emerald: ['emerald', 'teal'],
+    rose:    ['rose',    'pink'],
+    amber:   ['amber',   'orange'],
+    cyan:    ['cyan',    'sky'],
 };
 
 const FONT_SIZE_MAP: Record<string, string> = {
@@ -98,8 +51,10 @@ export function useApplySettings() {
     useEffect(() => {
         const root = document.documentElement;
         const apply = (isDark: boolean) => {
-            if (isDark) root.classList.add('dark');
-            else root.classList.remove('dark');
+            root.classList.toggle('dark', isDark);
+            // Thanh địa chỉ / status bar trên mobile khớp với nền
+            document.querySelector('meta[name="theme-color"]')
+                ?.setAttribute('content', isDark ? '#0b1220' : '#6366f1');
         };
 
         if (themeMode === 'system') {
@@ -114,9 +69,12 @@ export function useApplySettings() {
 
     // Apply accent color CSS vars
     useEffect(() => {
-        const vars = ACCENT_MAP[accentColor] ?? ACCENT_MAP.violet;
+        const [primaryName, accentName] = ACCENT_MAP[accentColor] ?? ACCENT_MAP.violet;
         const root = document.documentElement;
-        Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
+        SHADES.forEach((shade, i) => {
+            root.style.setProperty(`--color-primary-${shade}`, PALETTE[primaryName][i]);
+            root.style.setProperty(`--color-accent-${shade}`, PALETTE[accentName][i]);
+        });
     }, [accentColor]);
 
     // Apply font size
@@ -131,11 +89,7 @@ export function useApplySettings() {
             '--motion-duration',
             reducedMotion ? '0ms' : ''
         );
-        if (reducedMotion) {
-            document.documentElement.classList.add('reduce-motion');
-        } else {
-            document.documentElement.classList.remove('reduce-motion');
-        }
+        document.documentElement.classList.toggle('reduce-motion', reducedMotion);
     }, [reducedMotion]);
 
     // Apply sidebar default collapsed (once on mount)

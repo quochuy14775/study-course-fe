@@ -11,6 +11,7 @@ import { useSettingsStore, type AccentColor, type FontSize, type ThemeMode } fro
 import { useAuthStore } from '../stores/authStore';
 import { showToast } from '../components/CustomToast';
 import userService from '../services/userService';
+import { useMyActivity } from '../hooks/useMyActivity';
 
 // ── Primitives ────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ const Avatar: React.FC<{ name: string; url?: string | null; size?: number }> = (
 const ProfileTab: React.FC = () => {
     const user = useAuthStore((s) => s.user);
     const updateProfile = useAuthStore((s) => s.updateProfile);
+    const activity = useMyActivity(365);
 
     // Profile form
     const [fullName, setFullName]   = useState(user?.name ?? '');
@@ -300,12 +302,18 @@ const ProfileTab: React.FC = () => {
                 </AnimatePresence>
             </Section>
 
-            {/* Stats */}
+            {/* Stats — streak / bài học / ngày học lấy từ API hoạt động (365 ngày) */}
             <div className="grid grid-cols-3 gap-3">
                 {[
-                    { value: '7 🔥', sub: 'Streak', label: 'Ngày học liên tiếp' },
-                    { value: '3',    sub: 'Courses', label: 'Khóa đã hoàn thành' },
-                    { value: '24',   sub: 'Articles', label: 'Bài viết đã đọc' },
+                    {
+                        value: activity.data ? `${activity.data.currentStreak} 🔥` : '—',
+                        sub: 'Streak',
+                        label: activity.data && activity.data.currentStreak > 0 && !activity.data.streakSafeToday
+                            ? 'Học hôm nay để giữ streak'
+                            : 'Ngày học liên tiếp',
+                    },
+                    { value: activity.data ? String(activity.data.totalLessons) : '—', sub: 'Lessons',  label: 'Bài học đã hoàn thành' },
+                    { value: activity.data ? String(activity.data.activeDays) : '—',   sub: 'Days',     label: 'Ngày có học · 365 ngày' },
                 ].map((s) => (
                     <div key={s.sub} className="bg-white rounded-2xl border border-ink-100 shadow-soft p-4 text-center">
                         <p className="text-2xl font-extrabold text-ink-900">{s.value}</p>

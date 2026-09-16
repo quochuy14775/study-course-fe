@@ -17,6 +17,7 @@ import chapterService from '../../../services/chapterService';
 import lessonInteractionService from '../../../services/lessonInteractionService';
 import quizService from '../../../services/quizService';
 import progressService from '../../../services/progressService';
+import { invalidateMyActivity } from '../../../hooks/useMyActivity';
 import { useAuthStore } from '../../../stores/authStore';
 import { Course, formatDurationSeconds } from '../../../types/course';
 import { Lesson } from '../../../types/lesson';
@@ -570,7 +571,7 @@ const LearnPage: React.FC = () => {
         const lessonId = currentLesson.id;
         setDoneLessons((prev) => new Set(prev).add(lessonId));
         progressService.markComplete(lessonId)
-            .then(() => refreshCourseTest())
+            .then(() => { invalidateMyActivity(); return refreshCourseTest(); })
             .catch((e) => {
                 console.error(e);
                 showToast.error('Không thể lưu tiến độ. Vui lòng thử lại.');

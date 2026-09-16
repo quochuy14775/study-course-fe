@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { showToast } from '../../../components/CustomToast';
 import { Star, Clock, BookOpen, Heart, ArrowRight, Crown, Zap } from 'lucide-react';
+import { showToast } from '../../../components/CustomToast';
 import AuthGuardModal from '../../../components/AuthGuardModal';
 import EnrollConfirmModal from '../../../components/EnrollConfirmModal';
 import CheckoutModal from '../../../components/CheckoutModal';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
 import enrollmentService from '../../../services/enrollmentService';
 import { useAuthGuard } from '../../../hooks/useAuthGuard';
 import { useEnrollFlow } from '../../../hooks/useEnrollFlow';
+import { useSpotlight } from '../../../hooks/useSpotlight';
 import { Course, formatDurationSeconds } from '../../../types/course';
+import { cn } from '../../../lib/cn';
 
 interface CourseCardProps {
     course: Course;
@@ -17,31 +21,42 @@ interface CourseCardProps {
 }
 
 const THUMBNAIL_GRADIENTS = [
-    { from: '#4f46e5', to: '#7c3aed' },
-    { from: '#7c3aed', to: '#6366f1' },
-    { from: '#10b981', to: '#0d9488' },
-    { from: '#f43f5e', to: '#ec4899' },
-    { from: '#f59e0b', to: '#f97316' },
-    { from: '#06b6d4', to: '#3b82f6' },
+    'from-indigo-500 via-violet-500 to-purple-600',
+    'from-violet-500 via-fuchsia-500 to-pink-500',
+    'from-emerald-500 via-teal-500 to-cyan-600',
+    'from-rose-500 via-pink-500 to-fuchsia-500',
+    'from-amber-400 via-orange-500 to-rose-500',
+    'from-sky-500 via-blue-500 to-indigo-600',
 ];
 
-const LEVEL_CONFIG: Record<string, { label: string; className: string }> = {
-    Beginner:     { label: 'Cơ bản',    className: 'bg-code-50 text-code-700 border border-code-200' },
-    Intermediate: { label: 'Trung cấp', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
-    Advanced:     { label: 'Nâng cao',  className: 'bg-primary-50 text-primary-700 border border-primary-200' },
+const LEVEL: Record<string, { label: string; variant: 'success' | 'warning' | 'primary' }> = {
+    Beginner:     { label: 'Cơ bản',    variant: 'success' },
+    Intermediate: { label: 'Trung cấp', variant: 'warning' },
+    Advanced:     { label: 'Nâng cao',  variant: 'primary' },
+};
+
+const cardVariants = {
+    hidden: { opacity: 0, y: 24 },
+    show:   { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 260, damping: 26 } },
 };
 
 const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
     const [wishlisted, setWishlisted] = useState(false);
+    const [imgFailed, setImgFailed] = useState(false);
+    const [checkoutOpen, setCheckoutOpen] = useState(false);
     const navigate = useNavigate();
     const { guardOpen, guardAction, closeGuard, requireAuth } = useAuthGuard();
     const { pendingCourse, enrolling, requestEnroll, cancelEnroll, confirmEnroll } = useEnrollFlow();
-    const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const { ref: spotRef, onMouseMove } = useSpotlight<HTMLElement>();
 
-    const g = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
-    const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
+    const gradient = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
+    const level = LEVEL[course.level] ?? LEVEL.Beginner;
     const duration = formatDurationSeconds(course.totalDurationSeconds);
     const isPro = variant === 'pro';
+    const featured = isPro && course.isFeatured;
+    const showImage = !!course.imageUrl && !imgFailed;
+
+    const openCourse = () => navigate(`/courses/${course.id}`);
 
     /** Thanh toán hiện là mock; ghi danh mới là thứ thật sự được lưu xuống DB. */
     const handleCheckoutSuccess = async () => {
@@ -54,215 +69,170 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
     };
 
     return (
-        <motion.div
-            variants={{
-                hidden: { opacity: 0, y: 28 },
-                show:   { opacity: 1, y: 0 },
-            }}
-            whileHover={{ y: -6, transition: { type: 'spring', stiffness: 280, damping: 20 } }}
-            className={`group relative bg-white rounded-2xl border overflow-hidden flex flex-col transition-shadow duration-300 hover:shadow-[0_20px_48px_rgb(79_70_229/0.13)] ${
-                isPro && course.isFeatured
-                    ? 'border-primary-200 shadow-[0_0_0_1.5px_rgb(99_102_241/0.2)]'
-                    : 'border-ink-200 shadow-soft'
-            }`}
+        <motion.article
+            ref={spotRef}
+            onMouseMove={onMouseMove}
+            variants={cardVariants}
+            whileHover={{ y: -5, transition: { type: 'spring', stiffness: 300, damping: 22 } }}
+            className={cn(
+                'spotlight group relative flex flex-col overflow-hidden rounded-2xl bg-surface',
+                'border border-line shadow-card',
+                'transition-[border-color,box-shadow] duration-300',
+                'hover:border-primary-300/70 hover:shadow-card-hover dark:hover:border-primary-500/40',
+                featured && 'ring-1 ring-primary-400/40 dark:ring-primary-500/30',
+            )}
         >
-            {/* ── Thumbnail ───────────────────────────────────────── */}
+            {/* ── Thumbnail ─────────────────────────────────────── */}
             <div
-                onClick={() => navigate(`/courses/${course.id}`)}
+                onClick={openCourse}
                 className="relative aspect-[16/9] overflow-hidden flex-shrink-0 cursor-pointer"
             >
-                {course.imageUrl ? (
-                    /* Real thumbnail — Ken Burns zoom */
-                    <motion.img
-                        src={course.imageUrl}
+                {showImage ? (
+                    <img
+                        src={course.imageUrl!}
                         alt={course.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        animate={{ scale: [1, 1.06, 1] }}
-                        transition={{ duration: 10, ease: 'easeInOut', repeat: Infinity }}
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        loading="lazy"
+                        onError={() => setImgFailed(true)}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05]"
                     />
                 ) : (
-                    /* Fallback: animated gradient */
-                    <>
-                        <motion.div
-                            className="absolute inset-0"
-                            style={{ background: `linear-gradient(135deg, ${g.from}, ${g.to})` }}
-                            animate={{ backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'] }}
-                            transition={{ duration: 8, ease: 'easeInOut', repeat: Infinity }}
-                        />
+                    <div className={cn('absolute inset-0 bg-gradient-to-br transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]', gradient)}>
                         <div
-                            className="absolute inset-0 opacity-20"
+                            className="absolute inset-0 opacity-25"
                             style={{
                                 backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                                backgroundSize: '20px 20px',
+                                backgroundSize: '18px 18px',
                             }}
                         />
-                        <motion.div
-                            className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/10 blur-xl"
-                            animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0.7, 0.4] }}
-                            transition={{ duration: 4, ease: 'easeInOut', repeat: Infinity }}
-                        />
-                        <motion.div
-                            className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full bg-white/10 blur-lg"
-                            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-                            transition={{ duration: 5, ease: 'easeInOut', repeat: Infinity, delay: 1 }}
-                        />
+                        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/15 blur-2xl" />
                         <div className="absolute inset-0 flex items-center justify-center">
-                            <motion.span
-                                className="text-6xl font-black text-white/20 select-none leading-none"
-                                animate={{ scale: [1, 1.05, 1], opacity: [0.2, 0.3, 0.2] }}
-                                transition={{ duration: 6, ease: 'easeInOut', repeat: Infinity }}
-                            >
+                            <span className="font-mono text-6xl font-black text-white/25 select-none leading-none drop-shadow-sm">
                                 {course.title.charAt(0)}
-                            </motion.span>
+                            </span>
                         </div>
-                    </>
+                    </div>
                 )}
 
-                {/* Shimmer sweep — luôn chạy */}
-                <motion.div
-                    className="absolute inset-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                    animate={{ x: ['-100%', '450%'] }}
-                    transition={{ duration: 2.4, ease: 'easeInOut', repeat: Infinity, repeatDelay: 3.5 }}
-                />
+                {/* Overlay để badge dễ đọc */}
+                <div className="absolute inset-0 bg-gradient-to-t from-ink-950/50 via-transparent to-ink-950/10 pointer-events-none" />
 
-                {/* Dark overlay khi có ảnh thật để badge dễ đọc */}
-                {course.imageUrl && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
-                )}
-
-                {/* Featured ribbon */}
-                {isPro && course.isFeatured && (
-                    <motion.div
-                        className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full"
-                        animate={{ boxShadow: ['0 0 0 0 rgba(255,255,255,0.3)', '0 0 0 5px rgba(255,255,255,0)'] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                    >
-                        <Crown className="w-3 h-3 text-white" />
-                        <span className="text-[10px] font-bold text-white uppercase tracking-wider">Featured</span>
-                    </motion.div>
-                )}
-
-                {/* Wishlist */}
-                <button
-                    onClick={() => setWishlisted(!wishlisted)}
-                    className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-white/40"
-                >
-                    <Heart className={`w-3.5 h-3.5 transition-colors ${wishlisted ? 'text-rose-400 fill-rose-400' : 'text-white'}`} />
-                </button>
-            </div>
-
-            {/* ── Content ─────────────────────────────────────────── */}
-            <div className="flex flex-col flex-1 p-4 gap-3">
-                {/* Badges row */}
-                <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${levelCfg.className}`}>
-                        {levelCfg.label}
-                    </span>
-                    {isPro ? (
-                        <motion.span
-                            className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-primary-500 to-accent-500 text-white"
-                            animate={{ scale: [1, 1.06, 1] }}
-                            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                        >
-                            <Crown className="w-2.5 h-2.5" /> PRO
-                        </motion.span>
-                    ) : (
-                        <motion.span
-                            className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-code-50 text-code-700 border border-code-200"
-                            animate={{ scale: [1, 1.05, 1] }}
-                            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                        >
-                            <Zap className="w-2.5 h-2.5" /> Miễn phí
-                        </motion.span>
+                {/* Badge góc trên trái */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                    {featured && (
+                        <Badge variant="glass" size="sm">
+                            <Crown className="w-3 h-3" /> Featured
+                        </Badge>
                     )}
                 </div>
 
-                {/* Title */}
+                {/* Wishlist — hiện khi hover / focus */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); setWishlisted((w) => !w); }}
+                    aria-label={wishlisted ? 'Bỏ lưu' : 'Lưu khóa học'}
+                    aria-pressed={wishlisted}
+                    className={cn(
+                        'absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center',
+                        'bg-white/15 border border-white/25 backdrop-blur-md',
+                        'transition-all duration-200 hover:bg-white/30 active:scale-90',
+                        wishlisted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                    )}
+                >
+                    <Heart className={cn('w-3.5 h-3.5 transition-colors', wishlisted ? 'text-rose-400 fill-rose-400' : 'text-white')} />
+                </button>
+
+                {/* Thời lượng góc dưới phải */}
+                {course.totalDurationSeconds > 0 && (
+                    <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-ink-950/60 backdrop-blur-sm text-[11px] font-medium text-white">
+                        <Clock className="w-3 h-3" /> {duration}
+                    </span>
+                )}
+            </div>
+
+            {/* ── Content ───────────────────────────────────────── */}
+            <div className="flex flex-col flex-1 p-4 gap-3">
+                <div className="flex items-center justify-between gap-2">
+                    <Badge variant={level.variant} size="sm" className="normal-case tracking-normal">{level.label}</Badge>
+                    {isPro ? (
+                        <Badge variant="gradient" size="sm"><Crown className="w-2.5 h-2.5" /> Pro</Badge>
+                    ) : (
+                        <Badge variant="success" size="sm"><Zap className="w-2.5 h-2.5" /> Miễn phí</Badge>
+                    )}
+                </div>
+
                 <h3
-                    onClick={() => navigate(`/courses/${course.id}`)}
-                    className="text-sm font-bold text-ink-900 line-clamp-2 leading-snug cursor-pointer hover:text-primary-600 transition-colors"
+                    onClick={openCourse}
+                    className="text-[15px] font-bold text-fg line-clamp-2 leading-snug cursor-pointer transition-colors hover:text-primary-600 dark:hover:text-primary-300"
                 >
                     {course.title}
                 </h3>
 
-                {/* Description */}
-                <p className="text-xs text-ink-500 line-clamp-2 leading-relaxed flex-1">
+                <p className="text-xs text-fg-muted line-clamp-2 leading-relaxed flex-1">
                     {course.description}
                 </p>
 
                 {/* Meta */}
-                <div className="flex items-center gap-3 text-[11px] text-ink-400">
-                    <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                        <span className="font-semibold text-ink-700">{course.rating.toFixed(1)}</span>
-                    </div>
-                    {course.totalDurationSeconds > 0 && (
-                        <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{duration}</span>
-                        </div>
-                    )}
+                <div className="flex items-center gap-3 text-[11px] text-fg-subtle">
+                    <span className="inline-flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                        <span className="font-semibold text-fg-2">{course.rating.toFixed(1)}</span>
+                    </span>
                     {course.lessonCount > 0 && (
-                        <div className="flex items-center gap-1">
-                            <BookOpen className="w-3 h-3" />
-                            <span>{course.lessonCount} bài</span>
-                        </div>
+                        <span className="inline-flex items-center gap-1">
+                            <BookOpen className="w-3.5 h-3.5" />
+                            {course.lessonCount} bài
+                        </span>
+                    )}
+                    {course.chapterCount > 0 && (
+                        <span className="hidden sm:inline-flex items-center gap-1">
+                            {course.chapterCount} chương
+                        </span>
                     )}
                 </div>
 
-                <div className="h-px bg-ink-100" />
+                <div className="h-px bg-line-2" />
 
                 {/* Footer */}
                 <div className="flex items-center justify-between gap-2">
-                    <div>
-                        {isPro ? (
-                            <span className="text-base font-extrabold text-ink-900">
-                                {course.price.toLocaleString('vi-VN')}₫
-                            </span>
-                        ) : (
-                            <span className="text-base font-extrabold text-code-600">Miễn phí</span>
-                        )}
-                    </div>
-                    <motion.button
+                    {isPro ? (
+                        <span className="text-base font-extrabold tracking-tight text-fg tabular-nums">
+                            {course.price.toLocaleString('vi-VN')}<span className="text-xs font-bold text-fg-muted ml-0.5">₫</span>
+                        </span>
+                    ) : (
+                        <span className="text-base font-extrabold tracking-tight text-code-600 dark:text-emerald-400">Miễn phí</span>
+                    )}
+
+                    <Button
+                        size="sm"
+                        variant={isPro ? 'primary' : 'soft'}
+                        className="group/btn"
                         onClick={() => requireAuth(
                             // Khóa miễn phí đi qua dialog xác nhận; khóa có phí phải qua checkout trước.
                             () => isPro ? setCheckoutOpen(true) : requestEnroll(course),
                             `${isPro ? 'mua' : 'đăng ký'} khóa học "${course.title}"`
                         )}
-                        whileTap={{ scale: 0.95 }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                            isPro
-                                ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:brightness-105 hover:shadow-md hover:shadow-primary-500/30'
-                                : 'bg-primary-600 text-white hover:bg-primary-700 hover:shadow-md hover:shadow-primary-600/30'
-                        }`}
                     >
                         {isPro ? 'Mua ngay' : 'Đăng ký học'}
-                        <ArrowRight className="w-3 h-3" />
-                    </motion.button>
-
-                    <AuthGuardModal
-                        isOpen={guardOpen}
-                        onClose={closeGuard}
-                        action={guardAction}
-                    />
-                    <EnrollConfirmModal
-                        course={pendingCourse}
-                        loading={enrolling}
-                        onCancel={cancelEnroll}
-                        onConfirm={confirmEnroll}
-                    />
-                    <CheckoutModal
-                        isOpen={checkoutOpen}
-                        onClose={() => setCheckoutOpen(false)}
-                        title={course.title}
-                        price={course.price}
-                        onSuccess={handleCheckoutSuccess}
-                        onEnterCourse={() => navigate(`/courses/${course.id}/learn`)}
-                    />
+                        <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-0.5" />
+                    </Button>
                 </div>
             </div>
-        </motion.div>
+
+            <AuthGuardModal isOpen={guardOpen} onClose={closeGuard} action={guardAction} />
+            <EnrollConfirmModal
+                course={pendingCourse}
+                loading={enrolling}
+                onCancel={cancelEnroll}
+                onConfirm={confirmEnroll}
+            />
+            <CheckoutModal
+                isOpen={checkoutOpen}
+                onClose={() => setCheckoutOpen(false)}
+                title={course.title}
+                price={course.price}
+                onSuccess={handleCheckoutSuccess}
+                onEnterCourse={() => navigate(`/courses/${course.id}/learn`)}
+            />
+        </motion.article>
     );
 };
 

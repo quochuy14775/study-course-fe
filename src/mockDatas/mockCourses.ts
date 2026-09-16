@@ -22,12 +22,12 @@ const baseMock = (overrides: Partial<Course>): Course => ({
     ...overrides,
 });
 
+/** Dữ liệu mẫu — HomePage dùng khi backend không chạy (chỉ ở development). */
 export const freeCourses: Course[] = [
     baseMock({
         id: 1,
         title: "Introduction to React",
-        description: "Learn the basics of React including components, hooks, and state management.",
-        imageUrl: "string",
+        description: "Học React từ đầu: component, hooks, state và cách tổ chức một app thật.",
         level: "Beginner",
         isFeatured: true,
         rating: 4.8,
@@ -38,13 +38,32 @@ export const freeCourses: Course[] = [
     baseMock({
         id: 2,
         title: "JavaScript Fundamentals",
-        description: "Master JavaScript core concepts, ES6+, and best practices.",
-        imageUrl: "string",
+        description: "Nắm chắc JavaScript hiện đại: ES6+, async/await, module và best practice.",
         level: "Beginner",
         rating: 4.9,
         lessonCount: 18,
         chapterCount: 5,
         totalDurationSeconds: 8 * 3600,
+    }),
+    baseMock({
+        id: 3,
+        title: "Git & GitHub cho người mới",
+        description: "Quản lý mã nguồn, branch, pull request và quy trình làm việc nhóm.",
+        level: "Beginner",
+        rating: 4.7,
+        lessonCount: 9,
+        chapterCount: 3,
+        totalDurationSeconds: 3 * 3600 + 20 * 60,
+    }),
+    baseMock({
+        id: 4,
+        title: "HTML & CSS Responsive",
+        description: "Xây layout chuẩn với Flexbox, Grid và tư duy mobile-first.",
+        level: "Beginner",
+        rating: 4.6,
+        lessonCount: 14,
+        chapterCount: 4,
+        totalDurationSeconds: 5 * 3600 + 30 * 60,
     }),
 ];
 
@@ -52,9 +71,8 @@ export const premiumCourses: Course[] = [
     baseMock({
         id: 5,
         title: "Advanced React Patterns",
-        description: "Deep dive into advanced React patterns and optimization techniques.",
-        imageUrl: "string",
-        price: 99.99,
+        description: "Compound component, render props, custom hooks và tối ưu hiệu năng.",
+        price: 499000,
         level: "Intermediate",
         isFeatured: true,
         rating: 4.9,
@@ -62,11 +80,59 @@ export const premiumCourses: Course[] = [
         chapterCount: 6,
         totalDurationSeconds: 12 * 3600,
     }),
+    baseMock({
+        id: 6,
+        title: "TypeScript chuyên sâu",
+        description: "Generics, conditional types, type-level programming và cấu hình dự án lớn.",
+        price: 399000,
+        level: "Intermediate",
+        rating: 4.8,
+        lessonCount: 20,
+        chapterCount: 5,
+        totalDurationSeconds: 9 * 3600 + 45 * 60,
+    }),
+    baseMock({
+        id: 7,
+        title: "Node.js & REST API thực chiến",
+        description: "Express, xác thực JWT, PostgreSQL và deploy lên cloud.",
+        price: 599000,
+        level: "Advanced",
+        rating: 4.9,
+        lessonCount: 30,
+        chapterCount: 8,
+        totalDurationSeconds: 15 * 3600,
+    }),
+    baseMock({
+        id: 8,
+        title: "System Design cho Frontend",
+        description: "Kiến trúc micro-frontend, caching, performance budget và observability.",
+        price: 699000,
+        level: "Advanced",
+        rating: 4.7,
+        lessonCount: 16,
+        chapterCount: 5,
+        totalDurationSeconds: 10 * 3600,
+    }),
 ];
 
 // Hero slides
 export const slides = [
-    { title: "Learn React 🚀", desc: "Build modern web apps with React" },
-    { title: "Master TypeScript ⚡", desc: "Write safer and scalable code" },
-    { title: "Fullstack Developer 💻", desc: "Frontend + Backend in one journey" },
+    {
+        eyebrow: "Lộ trình Frontend",
+        title: "Học React từ số 0 đến",
+        highlight: "đi làm",
+        desc: "Component, hooks, state, routing — học qua dự án thật, có quiz và chứng chỉ sau mỗi khóa.",
+    },
+    {
+        eyebrow: "Viết code an toàn hơn",
+        title: "Làm chủ TypeScript trong",
+        highlight: "2 tuần",
+        desc: "Từ kiểu cơ bản đến generics và type-level programming, áp dụng ngay vào dự án của bạn.",
+    },
+    {
+        eyebrow: "Fullstack Developer",
+        title: "Frontend + Backend trong",
+        highlight: "một hành trình",
+        desc: "React, Node.js, database và deploy — đủ để tự tay đưa sản phẩm lên production.",
+    },
 ];

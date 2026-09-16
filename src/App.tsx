@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
+import CommandPalette from './components/CommandPalette';
 import HomePage from './pages/HomePage';
 import RoadmapPage from './pages/RoadmapPage';
 import ArticlesPage from './pages/ArticlesPage';
@@ -11,6 +13,7 @@ import AuthPage from './components/AuthPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SetupAccountPage from './pages/SetupAccountPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import AdminDashboard from "./pages/admin/dashboard";
 import CourseManagement from "./pages/admin/course";
 import LanguageManagement from "./pages/admin/language";
 import FrameworkManagement from "./pages/admin/framework";
@@ -20,10 +23,11 @@ import "react-toastify/dist/ReactToastify.css";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import ChatBot from "./components/ChatBot";
+import { TooltipProvider } from './components/ui/Tooltip';
 
-import './App.css';
 import { useAuthStore } from "./stores/authStore";
 import { useUiStore } from "./stores/uiStore";
+import { useSettingsStore } from "./stores/settingsStore";
 import { useApplySettings } from "./hooks/useApplySettings";
 import LessonManagement from "./pages/admin/course/lesson";
 import LearnPage from "./pages/user/course/LearnPage";
@@ -37,10 +41,13 @@ import NotificationsPage from "./pages/NotificationsPage";
 
 function ProtectedShell() {
     const collapsed = useUiStore((s) => s.sidebarCollapsed);
+    const isAdmin = useAuthStore((s) => s.user?.role === 'Admin');
+    const location = useLocation();
 
     return (
         <div className="flex flex-col min-h-screen">
             <Header />
+            <CommandPalette />
             <div className="flex flex-1 relative">
                 <Sidebar />
                 <ChatBot />
@@ -50,65 +57,79 @@ function ProtectedShell() {
                   Desktop: margin matches sidebar width (collapsed 20, expanded 64).
                 */}
                 <main
-                    className={`flex-1 min-w-0 transition-[margin] duration-300 ${
+                    className={`flex-1 min-w-0 transition-[margin] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                         collapsed ? 'md:ml-20' : 'md:ml-64'
                     }`}
                 >
-                    <Routes>
-                        <Route path="/" element={<HomePage />} />
-                        <Route path="/roadmap" element={<RoadmapPage />} />
-                        <Route path="/articles" element={<ArticlesPage />} />
-                        <Route path="/personal"   element={<ProtectedRoute><PersonalPage /></ProtectedRoute>} />
-                        <Route path="/my-courses" element={<ProtectedRoute><MyCoursesPage /></ProtectedRoute>} />
-                        <Route path="/saved"      element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
-                        <Route path="/settings"  element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                        <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-                        <Route path="/courses/:courseId" element={<CourseDetailPage />} />
-                        <Route path="/pricing" element={<PricingPage />} />
-                        <Route path="/certificates/:courseId" element={<ProtectedRoute><CertificatePage /></ProtectedRoute>} />
+                    {/* Page transition: fade + trượt nhẹ khi đổi route. mode="wait" để trang cũ
+                        biến mất xong trang mới mới vào — không bị chồng layout. */}
+                    <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                            key={location.pathname}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                            className="min-h-full"
+                        >
+                            <Routes location={location}>
+                                {/* Admin vào "/" thấy dashboard tổng quan; user/guest thấy trang chủ */}
+                                <Route path="/" element={isAdmin ? <AdminDashboard /> : <HomePage />} />
+                                <Route path="/roadmap" element={<RoadmapPage />} />
+                                <Route path="/articles" element={<ArticlesPage />} />
+                                <Route path="/personal"   element={<ProtectedRoute><PersonalPage /></ProtectedRoute>} />
+                                <Route path="/my-courses" element={<ProtectedRoute><MyCoursesPage /></ProtectedRoute>} />
+                                <Route path="/saved"      element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
+                                <Route path="/settings"  element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                                <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+                                <Route path="/courses/:courseId" element={<CourseDetailPage />} />
+                                <Route path="/pricing" element={<PricingPage />} />
+                                <Route path="/certificates/:courseId" element={<ProtectedRoute><CertificatePage /></ProtectedRoute>} />
 
-                        {/* Admin only */}
-                        <Route
-                            path="/management"
-                            element={
-                                <ProtectedRoute allowedRoles={["Admin"]}>
-                                    <CourseManagement />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route
-                            path="/management/languages"
-                            element={
-                                <ProtectedRoute allowedRoles={["Admin"]}>
-                                    <LanguageManagement />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route
-                            path="/management/frameworks"
-                            element={
-                                <ProtectedRoute allowedRoles={["Admin"]}>
-                                    <FrameworkManagement />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route
-                            path="/management/courses/:courseId/lessons"
-                            element={
-                                <ProtectedRoute allowedRoles={["Admin"]}>
-                                    <LessonManagement />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route
-                            path="/management/certificates"
-                            element={
-                                <ProtectedRoute allowedRoles={["Admin"]}>
-                                    <CertificateManagement />
-                                </ProtectedRoute>
-                            }
-                        />
-                    </Routes>
+                                {/* Admin only */}
+                                <Route
+                                    path="/management"
+                                    element={
+                                        <ProtectedRoute allowedRoles={["Admin"]}>
+                                            <CourseManagement />
+                                        </ProtectedRoute>
+                                    }
+                                />
+                                <Route
+                                    path="/management/languages"
+                                    element={
+                                        <ProtectedRoute allowedRoles={["Admin"]}>
+                                            <LanguageManagement />
+                                        </ProtectedRoute>
+                                    }
+                                />
+                                <Route
+                                    path="/management/frameworks"
+                                    element={
+                                        <ProtectedRoute allowedRoles={["Admin"]}>
+                                            <FrameworkManagement />
+                                        </ProtectedRoute>
+                                    }
+                                />
+                                <Route
+                                    path="/management/courses/:courseId/lessons"
+                                    element={
+                                        <ProtectedRoute allowedRoles={["Admin"]}>
+                                            <LessonManagement />
+                                        </ProtectedRoute>
+                                    }
+                                />
+                                <Route
+                                    path="/management/certificates"
+                                    element={
+                                        <ProtectedRoute allowedRoles={["Admin"]}>
+                                            <CertificateManagement />
+                                        </ProtectedRoute>
+                                    }
+                                />
+                            </Routes>
+                        </motion.div>
+                    </AnimatePresence>
                 </main>
             </div>
         </div>
@@ -117,6 +138,7 @@ function ProtectedShell() {
 
 function App() {
     const setToken = useAuthStore((state) => state.setToken);
+    const reducedMotion = useSettingsStore((s) => s.reducedMotion);
     useApplySettings();
 
     useEffect(() => {
@@ -128,42 +150,47 @@ function App() {
     }, [setToken]);
 
     return (
-        <Router>
-            <ToastContainer
-                position="top-right"
-                closeButton={false}
-                hideProgressBar
-                style={{ padding: '16px 16px 0 0', width: 400 }}
-            />
-            <Routes>
-                <Route path="/login" element={<AuthPage />} />
-                <Route path="/signup" element={<AuthPage />} />
-                <Route path="/verify-email" element={<VerifyEmailPage />} />
-                <Route path="/setup-account" element={<SetupAccountPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
+        // reducedMotion: "user" = theo OS; bật trong Settings thì tắt hẳn animation của Motion.
+        <MotionConfig reducedMotion={reducedMotion ? 'always' : 'user'}>
+            <TooltipProvider delayDuration={250} skipDelayDuration={400}>
+                <Router>
+                    <ToastContainer
+                        position="top-right"
+                        closeButton={false}
+                        hideProgressBar
+                        style={{ padding: '16px 16px 0 0', width: 400 }}
+                    />
+                    <Routes>
+                        <Route path="/login" element={<AuthPage />} />
+                        <Route path="/signup" element={<AuthPage />} />
+                        <Route path="/verify-email" element={<VerifyEmailPage />} />
+                        <Route path="/setup-account" element={<SetupAccountPage />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                {/* Full-screen learn page — no Header/Sidebar */}
-                <Route
-                    path="/courses/:courseId/learn"
-                    element={
-                        <ProtectedRoute>
-                            <LearnPage />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/courses/:courseId/learn/:lessonId"
-                    element={
-                        <ProtectedRoute>
-                            <LearnPage />
-                        </ProtectedRoute>
-                    }
-                />
+                        {/* Full-screen learn page — no Header/Sidebar */}
+                        <Route
+                            path="/courses/:courseId/learn"
+                            element={
+                                <ProtectedRoute>
+                                    <LearnPage />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/courses/:courseId/learn/:lessonId"
+                            element={
+                                <ProtectedRoute>
+                                    <LearnPage />
+                                </ProtectedRoute>
+                            }
+                        />
 
-                {/* Shell công khai — không cần đăng nhập để xem */}
-                <Route path="/*" element={<ProtectedShell />} />
-            </Routes>
-        </Router>
+                        {/* Shell công khai — không cần đăng nhập để xem */}
+                        <Route path="/*" element={<ProtectedShell />} />
+                    </Routes>
+                </Router>
+            </TooltipProvider>
+        </MotionConfig>
     );
 }
 

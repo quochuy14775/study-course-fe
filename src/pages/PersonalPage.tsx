@@ -1,180 +1,98 @@
-import React, { useState, useEffect } from 'react';
-import { motion, useInView, useMotionValue, useSpring, useTransform, useMotionTemplate, AnimatePresence, Variants } from 'framer-motion';
-import { Trash2, Search, Zap, Plus } from 'lucide-react';
-import { browsingHistory, personalInfo, BrowsingHistoryItem, generateContributionData } from '../mockDatas/mockBrowsingHistory';
+import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import {
+    Zap, Clock, BookOpen, Award, Target, Play, ArrowRight, FlaskConical, Lock, Trophy, Star,
+    CheckCircle2, XCircle, GraduationCap, UserPlus, Settings, Calendar, Flame, Code2, BadgeCheck,
+    Activity, Rocket, type LucideIcon,
+} from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
-import { ContributionGraph } from "../components/ContributionGraph";
-import { StatCard } from "../components/StatCard";
-import { HistoryItem } from "../components/HistoryItem";
+import { useMyActivity } from '../hooks/useMyActivity';
+import { useMyOverview } from '../hooks/useMyOverview';
+import { ContributionGraph, type ContributionDay } from '../components/ContributionGraph';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Tooltip } from '../components/ui/Tooltip';
+import {
+    container, card, pop, EASE, TONES, TiltCard, LiftCard, CardHeading, StatTile, Sparkles, AnimatedNumber,
+    ProfileBackdrop, ProfileTitle, fmtStudyTime, timeAgo,
+} from '../components/profile/ProfileKit';
+import AdminProfilePage from './AdminProfilePage';
+import { cn } from '../lib/cn';
+import type { Achievement, RankId, RecentEvent } from '../types/userOverview';
 
-// ---- Animation variants ---------------------------------------------------
-const container: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: { staggerChildren: 0.08, delayChildren: 0.1 },
-    },
+/* ─────────────────────────────────────────────────────────────
+   Bảng tra
+   ───────────────────────────────────────────────────────────── */
+
+const RANK_STYLE: Record<RankId, { chip: string }> = {
+    bronze:   { chip: 'from-amber-700 to-orange-600' },
+    silver:   { chip: 'from-slate-400 to-slate-500' },
+    gold:     { chip: 'from-amber-400 to-yellow-500' },
+    platinum: { chip: 'from-sky-400 to-cyan-500' },
+    diamond:  { chip: 'from-violet-500 to-fuchsia-500' },
 };
 
-const card: Variants = {
-    hidden: { opacity: 0, y: 24, scale: 0.97 },
-    show: {
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        transition: { type: 'spring', stiffness: 260, damping: 24 },
-    },
+const ACHIEVEMENT_ICON: Record<string, LucideIcon> = {
+    'first-lesson': BookOpen, 'lessons-25': BookOpen, 'lessons-100': BookOpen,
+    'streak-7': Flame, 'streak-30': Flame,
+    'quiz-10': Target, 'perfect-score': Star,
+    'first-cert': Award, 'certs-5': Award,
+    'active-100': Calendar,
 };
 
-const pop: Variants = {
-    hidden: { opacity: 0, scale: 0.6 },
-    show: { opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 500, damping: 18 } },
+const EVENT_META: Record<RecentEvent['kind'], { icon: LucideIcon; label: string; cls: string }> = {
+    lesson: { icon: CheckCircle2,  label: 'Hoàn thành bài', cls: 'bg-primary-50 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300' },
+    quiz:   { icon: Target,        label: 'Làm quiz',       cls: 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300' },
+    cert:   { icon: Award,         label: 'Chứng chỉ',      cls: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' },
+    enroll: { icon: UserPlus,      label: 'Ghi danh',       cls: 'bg-surface-2 text-fg-muted' },
 };
 
-// Reusable hover for cards (showy: lift + shadow + slight scale)
-const hoverLift = {
-    y: -6,
-    scale: 1.015,
-    boxShadow: '0 18px 40px rgb(79 70 229 / 0.12)',
-    transition: { type: 'spring' as const, stiffness: 300, damping: 20 },
-};
+const LEVEL_LABEL = { Beginner: 'Cơ bản', Intermediate: 'Trung cấp', Advanced: 'Nâng cao' } as const;
 
-// ---- 3D tilt card that follows the mouse + spotlight glow ------------------
-const TiltCard: React.FC<{ className?: string; children: React.ReactNode }> = ({ className, children }) => {
-    const x = useMotionValue(0);
-    const y = useMotionValue(0);
-    const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [8, -8]), { stiffness: 200, damping: 18 });
-    const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-10, 10]), { stiffness: 200, damping: 18 });
-    // spotlight position
-    const px = useTransform(x, [-0.5, 0.5], ['0%', '100%']);
-    const py = useTransform(y, [-0.5, 0.5], ['0%', '100%']);
-    const spotlight = useMotionTemplate`radial-gradient(220px circle at ${px} ${py}, rgb(99 102 241 / 0.10), transparent 70%)`;
-
-    const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        x.set((e.clientX - r.left) / r.width - 0.5);
-        y.set((e.clientY - r.top) / r.height - 0.5);
-    };
-    const reset = () => { x.set(0); y.set(0); };
-
-    return (
-        <motion.div
-            variants={card}
-            onMouseMove={handleMove}
-            onMouseLeave={reset}
-            style={{ rotateX, rotateY, transformPerspective: 900 }}
-            whileHover={{ y: -6, boxShadow: '0 22px 50px rgb(79 70 229 / 0.16)' }}
-            className={`relative ${className ?? ''}`}
-        >
-            <motion.div className="pointer-events-none absolute inset-0 rounded-xl" style={{ background: spotlight }} />
-            <div style={{ transform: 'translateZ(40px)' }} className="relative h-full">{children}</div>
-        </motion.div>
-    );
-};
-
-// ---- Sparkles that twinkle around an element -------------------------------
-const Sparkles: React.FC = () => {
-    const dots = [
-        { top: '-6px', left: '10%', d: 0 },
-        { top: '50%', left: '-8px', d: 0.4 },
-        { top: '-4px', right: '20%', d: 0.8 },
-        { bottom: '-6px', left: '40%', d: 1.2 },
-        { top: '40%', right: '-6px', d: 1.6 },
-    ];
-    return (
-        <>
-            {dots.map((s, i) => (
-                <motion.span
-                    key={i}
-                    className="absolute w-1 h-1 rounded-full bg-orange-400"
-                    style={{ top: s.top, left: s.left, right: s.right, bottom: s.bottom } as React.CSSProperties}
-                    animate={{ scale: [0, 1.4, 0], opacity: [0, 1, 0] }}
-                    transition={{ duration: 1.6, delay: s.d, repeat: Infinity, repeatDelay: 0.6 }}
-                />
-            ))}
-        </>
-    );
-};
-
-// ---- Animated number counter ---------------------------------------------
-const AnimatedNumber: React.FC<{ value: number; format?: (n: number) => string }> = ({ value, format }) => {
-    const ref = React.useRef<HTMLSpanElement>(null);
-    const inView = useInView(ref, { once: true, margin: '-40px' });
-    const mv = useMotionValue(0);
-    const spring = useSpring(mv, { stiffness: 80, damping: 20 });
-    const [display, setDisplay] = useState('0');
-
-    useEffect(() => {
-        if (inView) mv.set(value);
-    }, [inView, value, mv]);
-
-    useEffect(() => {
-        return spring.on('change', (v) => {
-            setDisplay(format ? format(Math.round(v)) : Math.round(v).toLocaleString());
-        });
-    }, [spring, format]);
-
-    return <span ref={ref}>{display}</span>;
-};
+/* ─────────────────────────────────────────────────────────────
+   Page — admin không học nên có trang riêng
+   ───────────────────────────────────────────────────────────── */
 
 const PersonalPage: React.FC = () => {
     const user = useAuthStore((state) => state.user);
-    const displayName = user?.name || user?.email || personalInfo.name;
-    const displayEmail = user?.email || personalInfo.email;
-    const avatarSeed = encodeURIComponent(displayName);
+    if (user?.role === 'Admin') return <AdminProfilePage />;
+    return <LearnerProfile />;
+};
 
-    const [history, setHistory] = useState<BrowsingHistoryItem[]>(browsingHistory);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [contributionData] = useState(generateContributionData());
+const LearnerProfile: React.FC = () => {
+    const navigate = useNavigate();
+    const user = useAuthStore((state) => state.user);
+    const overview = useMyOverview();
+    const activity = useMyActivity(365);
 
-    const filteredHistory = history
-        .filter(item => item.courseTitle.toLowerCase().includes(searchQuery.toLowerCase()))
-        .sort((a, b) => b.visitedAt.getTime() - a.visitedAt.getTime())
-        .slice(0, 5);
+    const data = overview.data;
+    const displayName = data?.profile.fullName || user?.name || user?.email || 'Học viên';
+    const displayEmail = data?.profile.email || user?.email || '';
+    const avatarUrl = data?.profile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`;
 
-    const handleClearHistory = () => {
-        if (window.confirm('Clear all activity?')) setHistory([]);
-    };
+    const contributionData = useMemo<ContributionDay[]>(
+        () => (activity.data?.days ?? []).map((d) => ({
+            date: new Date(`${d.date}T00:00:00`), // không có Z → theo giờ máy, đúng ngày BE trả
+            count: d.count, lessons: d.lessons, quizzes: d.quizzes, posts: d.posts,
+            enrollments: d.enrollments, certificates: d.certificates,
+        })),
+        [activity.data],
+    );
 
-    const handleDeleteItem = (id: string) => {
-        setHistory(history.filter(item => item.id !== id));
-    };
+    const streak = data?.currentStreak ?? activity.data?.currentStreak ?? 0;
+    const streakAtRisk = streak > 0 && !(data?.streakSafeToday ?? activity.data?.streakSafeToday ?? true);
+    const isMock = overview.source === 'mock' || activity.source === 'mock';
 
-    const formatDate = (date: Date) => {
-        const now = new Date();
-        const diffHours = Math.floor((now.getTime() - date.getTime()) / 3600000);
-        if (diffHours < 24) return `${diffHours}h`;
-        const diffDays = Math.floor(diffHours / 24);
-        return `${diffDays}d`;
-    };
+    const rankStyle = data ? RANK_STYLE[data.rank.id] : RANK_STYLE.bronze;
+    const rankProgress = data && data.rank.nextMinPoints
+        ? Math.min(100, ((data.points - data.rank.minPoints) / (data.rank.nextMinPoints - data.rank.minPoints)) * 100)
+        : 100;
+    const earned = data?.achievements.filter((a) => a.earned).length ?? 0;
 
     return (
-        <main className="min-h-screen bg-ink-50 relative overflow-hidden">
-            {/* Animated gradient mesh + grid background */}
-            <motion.div
-                className="absolute inset-0 bg-gradient-mesh pointer-events-none"
-                style={{ backgroundSize: '180% 180%' }}
-                animate={{ backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'] }}
-                transition={{ duration: 18, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
-
-            {/* Floating color blobs */}
-            <motion.div
-                className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-primary-400/20 blur-3xl pointer-events-none"
-                animate={{ x: [0, 60, 0], y: [0, 40, 0], scale: [1, 1.15, 1] }}
-                transition={{ duration: 16, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <motion.div
-                className="absolute top-1/3 -right-24 w-[28rem] h-[28rem] rounded-full bg-accent-400/20 blur-3xl pointer-events-none"
-                animate={{ x: [0, -50, 0], y: [0, -30, 0], scale: [1, 1.2, 1] }}
-                transition={{ duration: 20, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <motion.div
-                className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-code-400/15 blur-3xl pointer-events-none"
-                animate={{ x: [0, 40, 0], y: [0, -40, 0], scale: [1, 1.1, 1] }}
-                transition={{ duration: 22, ease: 'easeInOut', repeat: Infinity }}
-            />
+        <main className="min-h-screen relative overflow-hidden">
+            <ProfileBackdrop />
 
             <motion.div
                 variants={container}
@@ -182,248 +100,382 @@ const PersonalPage: React.FC = () => {
                 animate="show"
                 className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6"
             >
-                {/* Page header */}
-                <motion.section variants={card}>
-                    <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
-                        <span className="text-ink-400">~/</span>
-                        <span>personal</span>
-                        <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
-                    </div>
-                    <motion.h1
-                        className="text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-primary-600 via-accent-500 to-primary-600 bg-clip-text text-transparent"
-                        style={{ backgroundSize: '200% auto' }}
-                        animate={{ backgroundPosition: ['0% center', '200% center'] }}
-                        transition={{ duration: 6, ease: 'linear', repeat: Infinity }}
-                    >
-                        Trang cá nhân
-                    </motion.h1>
-                </motion.section>
-
-                {/* TOP GRID: PROFILE & ACHIEVEMENTS */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                    {/* 1. PROFILE CARD */}
-                    <TiltCard className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 sm:p-6 flex items-center gap-4 sm:gap-6 overflow-hidden">
-                        {/* shimmer sweep */}
-                        <motion.div
-                            className="pointer-events-none absolute top-0 -left-1/3 w-1/3 h-full -skew-x-12 bg-gradient-to-r from-transparent via-white/60 to-transparent"
-                            animate={{ left: ['-40%', '140%'] }}
-                            transition={{ duration: 3.5, ease: 'easeInOut', repeat: Infinity, repeatDelay: 2.5 }}
-                        />
-                        <motion.img
-                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
-                            alt={displayName}
-                            className="w-20 h-20 rounded-full border border-slate-100 shadow-sm"
-                            animate={{ y: [0, -6, 0] }}
-                            transition={{ duration: 4, ease: 'easeInOut', repeat: Infinity }}
-                            whileHover={{ scale: 1.08, rotate: 3 }}
-                        />
-                        <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                                <h2 className="text-xl font-bold text-slate-900">{displayName}</h2>
-                                <motion.span
-                                    className="relative px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-bold rounded-full border border-orange-100 flex items-center gap-1"
-                                    animate={{ boxShadow: ['0 0 0 0 rgb(251 146 60 / 0.5)', '0 0 0 8px rgb(251 146 60 / 0)'] }}
-                                    transition={{ duration: 2, ease: 'easeOut', repeat: Infinity }}
-                                >
-                                    <Sparkles />
-                                    <motion.span
-                                        animate={{ scale: [1, 1.25, 1] }}
-                                        transition={{ duration: 1.4, repeat: Infinity }}
-                                        className="flex items-center"
-                                    >
-                                        <Zap className="w-3 h-3 fill-current" />
-                                    </motion.span>
-                                    {personalInfo.streak} DAYS
-                                </motion.span>
-                            </div>
-                            <p className="text-sm font-medium text-slate-500">{displayEmail}</p>
-                            <p className="text-sm text-slate-400 mt-2 line-clamp-1">{personalInfo.bio}</p>
-                        </div>
-                    </TiltCard>
-
-                    {/* 2. ACHIEVEMENTS CARD */}
-                    <TiltCard className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Achievements</h3>
-                            <span className="text-xs font-bold text-blue-600">
-                                <AnimatedNumber value={personalInfo.points} /> pts
+                <ProfileTitle
+                    path={['personal']}
+                    title="Trang cá nhân"
+                    right={isMock && (
+                        <Tooltip content="Backend không phản hồi — đang hiển thị dữ liệu mẫu (chỉ ở development)" side="bottom">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 text-[11px] font-semibold">
+                                <FlaskConical className="w-3 h-3" /> Dữ liệu mẫu
                             </span>
-                        </div>
-                        <motion.div
-                            className="flex flex-wrap gap-2"
-                            variants={{ show: { transition: { staggerChildren: 0.06 } } }}
-                        >
-                            {personalInfo.achievements.map((ach, idx) => (
-                                <motion.span
-                                    key={idx}
-                                    variants={pop}
-                                    whileHover={{ scale: 1.12, y: -2 }}
-                                    className="px-3 py-1 bg-slate-50 text-slate-600 text-xs font-medium rounded-full border border-slate-100 cursor-default"
-                                >
-                                    {ach.name}
-                                </motion.span>
-                            ))}
-                        </motion.div>
-                    </TiltCard>
-                </div>
+                        </Tooltip>
+                    )}
+                />
 
-                {/* MIDDLE GRID: STATS & SKILLS & ACTIVITY */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {overview.loading && !data && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 h-40 rounded-2xl shimmer" />
+                        <div className="h-40 rounded-2xl shimmer" />
+                    </div>
+                )}
+                {overview.error && (
+                    <div className="rounded-2xl border border-line bg-surface p-8 text-center">
+                        <p className="text-sm text-fg-2">{overview.error}</p>
+                        <Button variant="secondary" size="sm" className="mt-3" onClick={overview.refresh}>Thử lại</Button>
+                    </div>
+                )}
 
-                    {/* 3. STATS CARD */}
-                    <motion.div variants={card} className="space-y-4">
-                        <motion.div whileHover={hoverLift}>
-                            <StatCard label="Total study time" value={personalInfo.totalStudyTime} />
-                        </motion.div>
-                        <motion.div whileHover={hoverLift}>
-                            <StatCard label="Lessons completed" value={personalInfo.totalCoursesCompleted} />
-                        </motion.div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <motion.div whileHover={hoverLift}>
-                                <StatCard label="Rate" value={`${personalInfo.completionRate}%`} />
-                            </motion.div>
-                            <motion.div whileHover={hoverLift}>
-                                <StatCard label="Rank" value={personalInfo.rank.split(' ')[0]} />
-                            </motion.div>
-                        </div>
-                    </motion.div>
-
-                    {/* 4. SKILLS PROGRESS */}
-                    <motion.div
-                        variants={card}
-                        whileHover={hoverLift}
-                        className="bg-white border border-slate-200 rounded-xl p-6"
-                    >
-                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-6">Skills Progress</h3>
-                        <div className="space-y-5">
-                            {personalInfo.skills.map((skill, idx) => (
-                                <div key={idx} className="space-y-2">
-                                    <div className="flex justify-between text-xs font-medium">
-                                        <span className="text-slate-700">{skill.name}</span>
-                                        <span className="text-slate-400">{skill.progress}%</span>
-                                    </div>
-                                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                                        <motion.div
-                                            className="relative h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full overflow-hidden"
-                                            initial={{ width: 0 }}
-                                            whileInView={{ width: `${skill.progress}%` }}
-                                            viewport={{ once: true, margin: '-40px' }}
-                                            transition={{ duration: 1.1, ease: 'easeOut', delay: idx * 0.12 }}
-                                        >
-                                            <motion.div
-                                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent"
-                                                animate={{ x: ['-100%', '200%'] }}
-                                                transition={{ duration: 1.8, ease: 'easeInOut', repeat: Infinity, repeatDelay: 1.5, delay: 1 }}
-                                            />
-                                        </motion.div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-
-                    {/* 6. RECENT ACTIVITY CARD */}
-                    <motion.div
-                        variants={card}
-                        className="bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden"
-                    >
-                        <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-                            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Recent Activity</h3>
-                            <div className="flex items-center gap-2">
-                                <div className="relative">
-                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                                    <input
-                                        type="text"
-                                        className="pl-6 py-1 text-[10px] bg-slate-50 border border-slate-100 rounded-md focus:outline-none w-24 focus:ring-2 focus:ring-primary-100 transition-all"
-                                        placeholder="Search..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
-                                </div>
-                                <motion.button
-                                    onClick={handleClearHistory}
-                                    whileHover={{ scale: 1.2, rotate: -8 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    className="text-slate-300 hover:text-red-400 transition-colors"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </motion.button>
-                            </div>
-                        </div>
-                        <div className="flex-1 divide-y divide-slate-50 overflow-y-auto">
-                            <AnimatePresence mode="popLayout">
-                                {filteredHistory.map(item => (
-                                    <motion.div
-                                        key={item.id}
-                                        layout
-                                        initial={{ opacity: 0, x: -16 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 16, height: 0 }}
-                                        transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-                                    >
-                                        <HistoryItem
-                                            item={item}
-                                            formatDate={formatDate}
-                                            onDelete={handleDeleteItem}
+                {data && (
+                    <>
+                        {/* ── Hồ sơ + Thành tích ── */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <TiltCard className="lg:col-span-2 p-5 sm:p-6 overflow-hidden">
+                                {/* shimmer sweep */}
+                                <motion.div
+                                    className="pointer-events-none absolute top-0 -left-1/3 w-1/3 h-full -skew-x-12 bg-gradient-to-r from-transparent via-white/50 dark:via-white/10 to-transparent"
+                                    animate={{ left: ['-40%', '140%'] }}
+                                    transition={{ duration: 3.5, ease: 'easeInOut', repeat: Infinity, repeatDelay: 3 }}
+                                />
+                                <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+                                    <div className="relative flex-shrink-0">
+                                        <motion.img
+                                            src={avatarUrl}
+                                            alt={displayName}
+                                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-surface-2 ring-4 ring-surface shadow-soft-lg"
+                                            animate={{ y: [0, -6, 0] }}
+                                            transition={{ duration: 4, ease: 'easeInOut', repeat: Infinity }}
+                                            whileHover={{ scale: 1.08, rotate: 3 }}
                                         />
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
-                        </div>
-                    </motion.div>
-                </div>
+                                        <span className={cn('absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r shadow-md', rankStyle.chip)}>
+                                            {data.rank.label}
+                                        </span>
+                                    </div>
 
-                {/* 5. CONTRIBUTION GRAPH - FULL WIDTH */}
-                <motion.section
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-60px' }}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                >
-                    <ContributionGraph contributions={contributionData} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2.5">
+                                            <h2 className="text-xl font-bold text-fg truncate">{displayName}</h2>
+                                            {data.profile.role && <Badge variant="primary" size="sm">{data.profile.role}</Badge>}
+                                            <motion.span
+                                                className="relative px-2.5 py-1 bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-300 text-[11px] font-bold rounded-full border border-orange-100 dark:border-orange-500/30 flex items-center gap-1"
+                                                animate={streak > 0 ? { boxShadow: ['0 0 0 0 rgb(251 146 60 / 0.5)', '0 0 0 8px rgb(251 146 60 / 0)'] } : undefined}
+                                                transition={{ duration: 2, ease: 'easeOut', repeat: Infinity }}
+                                            >
+                                                {streak > 0 && <Sparkles />}
+                                                <Zap className="w-3 h-3 fill-current" />
+                                                {streak} NGÀY
+                                            </motion.span>
+                                        </div>
+                                        <p className="text-sm text-fg-muted mt-0.5 truncate">{displayEmail}</p>
+                                        <p className="text-xs text-fg-subtle mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" /> Tham gia {new Date(data.joinedAt).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}</span>
+                                            <span className="inline-flex items-center gap-1"><GraduationCap className="w-3 h-3" /> {data.stats.enrolledCourses} khóa · {data.stats.completedCourses} hoàn thành</span>
+                                            {streakAtRisk && <span className="text-amber-600 dark:text-amber-400 font-medium">Học hôm nay để giữ streak</span>}
+                                        </p>
+
+                                        {/* Hạng & điểm */}
+                                        <div className="mt-4">
+                                            <div className="flex items-center justify-between text-[11px] mb-1.5">
+                                                <span className="text-fg-muted">
+                                                    <span className="font-bold text-fg"><AnimatedNumber value={data.points} /></span> điểm
+                                                    {data.rank.nextLabel && data.rank.nextMinPoints != null && (
+                                                        <> · còn <span className="font-semibold text-fg-2">{(data.rank.nextMinPoints - data.points).toLocaleString('vi-VN')}</span> để lên {data.rank.nextLabel}</>
+                                                    )}
+                                                </span>
+                                                <span className="font-semibold text-fg-2 tabular-nums">{Math.round(rankProgress)}%</span>
+                                            </div>
+                                            <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
+                                                <motion.div
+                                                    className={cn('h-full rounded-full bg-gradient-to-r', rankStyle.chip)}
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${rankProgress}%` }}
+                                                    transition={{ duration: 1.1, ease: EASE, delay: 0.4 }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex sm:flex-col gap-2 flex-shrink-0">
+                                        <Button variant="secondary" size="sm" onClick={() => navigate('/settings')}>
+                                            <Settings className="w-3.5 h-3.5" /> Chỉnh sửa
+                                        </Button>
+                                        <Button size="sm" onClick={() => navigate('/my-courses')}>
+                                            <BookOpen className="w-3.5 h-3.5" /> Khóa của tôi
+                                        </Button>
+                                    </div>
+                                </div>
+                            </TiltCard>
+
+                            {/* Thành tích — tone hổ phách (huy chương); nhấc nhẹ, không nghiêng để badge không bị phóng to */}
+                            <LiftCard tone="amber" watermark={Trophy} className="p-5 sm:p-6">
+                                <CardHeading
+                                    tone="amber"
+                                    icon={Trophy}
+                                    title="Thành tích"
+                                    subtitle={`${earned}/${data.achievements.length} đã mở khóa`}
+                                    right={
+                                        <span className={cn('px-2 py-1 rounded-lg text-[11px] font-bold tabular-nums', TONES.amber.soft)}>
+                                            {Math.round((earned / Math.max(1, data.achievements.length)) * 100)}%
+                                        </span>
+                                    }
+                                    className="mb-5"
+                                />
+                                <motion.div className="grid grid-cols-5 gap-y-4 gap-x-2 justify-items-center" variants={{ show: { transition: { staggerChildren: 0.05 } } }}>
+                                    {data.achievements.map((a) => <AchievementBadge key={a.id} a={a} />)}
+                                </motion.div>
+                            </LiftCard>
+                        </div>
+
+                        {/* ── Thống kê · Kỹ năng · Học tiếp ── */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {/* Mỗi ô một tone trùng với card liên quan: học tiếp / kỹ năng / thành tích / chứng chỉ */}
+                            <motion.div variants={card} className="grid grid-cols-2 gap-3 content-start">
+                                <StatTile tone="emerald" icon={Clock}    label="Thời gian học"  value={fmtStudyTime(data.stats.studySeconds)} />
+                                <StatTile tone="primary" icon={BookOpen} label="Bài đã học"     value={data.stats.lessonsCompleted} />
+                                <StatTile tone="amber"   icon={Target}   label="Quiz đạt"       value={`${data.stats.quizPassed}/${data.stats.quizAttempts}`} sub={data.stats.quizAttempts ? `${Math.round(data.stats.quizPassRate)}%` : undefined} />
+                                <StatTile tone="sky"     icon={Award}    label="Chứng chỉ"      value={data.stats.certificates} sub={data.stats.bestScore ? `cao nhất ${Math.round(data.stats.bestScore)}` : undefined} />
+                            </motion.div>
+
+                            {/* Kỹ năng — tone tím brand (code) */}
+                            <LiftCard tone="primary" watermark={Code2} className="p-6">
+                                <CardHeading tone="primary" icon={Code2} title="Kỹ năng" subtitle="% bài học hoàn thành theo ngôn ngữ / framework" className="mb-5" />
+                                {data.skills.length === 0 ? (
+                                    <p className="text-sm text-fg-subtle py-6 text-center">Hoàn thành bài học để thấy tiến độ kỹ năng.</p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {data.skills.map((skill, idx) => (
+                                            <div key={`${skill.kind}-${skill.id}`} className="space-y-1.5">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="flex items-center gap-2 font-medium text-fg-2">
+                                                        {skill.iconUrl
+                                                            ? <img src={skill.iconUrl} alt="" className="w-5 h-5 rounded-md" loading="lazy" />
+                                                            : <span className={cn('w-5 h-5 rounded-md font-mono text-[10px] font-bold flex items-center justify-center', TONES.primary.soft)}>{skill.name.charAt(0)}</span>}
+                                                        {skill.name}
+                                                        <span className="px-1.5 py-px rounded-md bg-surface-2 text-[9px] uppercase tracking-wider text-fg-subtle font-semibold">{skill.kind === 'language' ? 'ngôn ngữ' : 'framework'}</span>
+                                                    </span>
+                                                    <span className="text-fg-subtle tabular-nums">{skill.completedLessons}/{skill.totalLessons} · <span className="font-semibold text-fg-2">{Math.round(skill.progress)}%</span></span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-surface-2 rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full"
+                                                        initial={{ width: 0 }}
+                                                        whileInView={{ width: `${skill.progress}%` }}
+                                                        viewport={{ once: true, margin: '-40px' }}
+                                                        transition={{ duration: 1, ease: EASE, delay: idx * 0.1 }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </LiftCard>
+
+                            {/* Học tiếp — tone xanh ngọc (tiến độ / play) */}
+                            <LiftCard tone="emerald" watermark={Rocket} className="md:col-span-2 lg:col-span-1 p-6 flex flex-col">
+                                <CardHeading tone="emerald" icon={Rocket} title="Học tiếp" subtitle="Khóa đang dở, mới học gần đây nhất ở trên" className="mb-4" />
+                                {data.continueLearning.length === 0 ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center py-6">
+                                        <p className="text-sm text-fg-2">Chưa có khóa nào đang học.</p>
+                                        <Button size="sm" className="mt-3" onClick={() => navigate('/')}>Khám phá khóa học <ArrowRight className="w-3.5 h-3.5" /></Button>
+                                    </div>
+                                ) : (
+                                    <ul className="space-y-3">
+                                        {data.continueLearning.map((c) => (
+                                            <li key={c.courseId} className="group/item rounded-xl border border-line-2 p-3 transition-colors hover:border-emerald-300/70 hover:bg-emerald-50/40 dark:hover:bg-emerald-500/5">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-semibold text-fg truncate">{c.title}</p>
+                                                        <p className="text-[11px] text-fg-subtle mt-0.5 truncate">
+                                                            {LEVEL_LABEL[c.level]} · {c.completedLessons}/{c.lessonCount} bài
+                                                            {c.lastActivityAt && ` · ${timeAgo(c.lastActivityAt)}`}
+                                                        </p>
+                                                    </div>
+                                                    <span className={cn('text-sm font-bold tabular-nums flex-shrink-0', TONES.emerald.text)}>{Math.round(c.progress)}%</span>
+                                                </div>
+                                                <div className="mt-2 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                                                    <motion.div
+                                                        className={cn('h-full rounded-full bg-gradient-to-r', TONES.emerald.bar)}
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${c.progress}%` }}
+                                                        transition={{ duration: 0.9, ease: EASE, delay: 0.3 }}
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={() => navigate(c.nextLessonId ? `/courses/${c.courseId}/learn/${c.nextLessonId}` : `/courses/${c.courseId}/learn`)}
+                                                    className={cn('mt-2.5 w-full flex items-center gap-2 text-xs font-semibold', TONES.emerald.text)}
+                                                >
+                                                    <span className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center flex-shrink-0 shadow-[0_0_10px_rgb(16_185_129/0.45)] group-hover/item:scale-110 transition-transform">
+                                                        <Play className="w-3 h-3 fill-current ml-0.5" />
+                                                    </span>
+                                                    <span className="truncate">{c.nextLessonTitle ? `Tiếp: ${c.nextLessonTitle}` : 'Tiếp tục học'}</span>
+                                                    <ArrowRight className="w-3.5 h-3.5 ml-auto flex-shrink-0 transition-transform group-hover/item:translate-x-0.5" />
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </LiftCard>
+                        </div>
+                    </>
+                )}
+
+                {/* ── Contribution graph ── */}
+                <motion.section variants={card} whileHover={{ y: -5, transition: { type: 'spring', stiffness: 300, damping: 20 } }}>
+                    {activity.loading && !activity.data ? (
+                        <div className="bg-surface border border-line rounded-2xl p-6 shadow-card">
+                            <div className="h-4 w-56 rounded shimmer mb-5" />
+                            <div className="h-[132px] rounded-lg shimmer" />
+                        </div>
+                    ) : activity.error ? (
+                        <div className="bg-surface border border-line rounded-2xl p-6 shadow-card text-sm text-fg-muted text-center">{activity.error}</div>
+                    ) : (
+                        <ContributionGraph
+                            contributions={contributionData}
+                            subtitle={activity.data && (
+                                <>
+                                    <span className="font-semibold text-fg-2">{activity.data.totalActions.toLocaleString('vi-VN')}</span> hoạt động
+                                    <span className="mx-1.5 text-fg-subtle">·</span>
+                                    <span className="font-semibold text-fg-2">{activity.data.activeDays}</span> ngày có học
+                                    <span className="mx-1.5 text-fg-subtle">·</span>
+                                    chuỗi dài nhất <span className="font-semibold text-fg-2">{activity.data.longestStreak}</span> ngày
+                                </>
+                            )}
+                        />
+                    )}
                 </motion.section>
 
-                {/* 7. EXTENSIBILITY (Modular Cards) */}
-                <motion.div
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                    variants={{ show: { transition: { staggerChildren: 0.1 } } }}
-                    initial="hidden"
-                    whileInView="show"
-                    viewport={{ once: true, margin: '-60px' }}
-                >
-                    {[
-                        { title: 'Add Certificates', desc: 'Show off your verified skills' },
-                        { title: 'Add Leaderboard', desc: 'See how you rank in the community' },
-                        { title: 'AI Recommendations', desc: 'Personalized paths for your goals' },
-                    ].map((c) => (
-                        <motion.div
-                            key={c.title}
-                            variants={card}
-                            whileHover={{
-                                y: -8,
-                                borderColor: 'rgb(165 180 252)',
-                                boxShadow: '0 20px 44px rgb(79 70 229 / 0.15)',
-                            }}
-                            className="bg-white border border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-[160px] group cursor-pointer"
-                        >
-                            <motion.div
-                                whileHover={{ rotate: 90, scale: 1.1 }}
-                                transition={{ type: 'spring', stiffness: 300 }}
-                                className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary-50 group-hover:text-primary-500 transition-colors"
-                            >
-                                <Plus className="w-5 h-5" />
-                            </motion.div>
-                            <div>
-                                <p className="text-sm font-semibold text-slate-900">{c.title}</p>
-                                <p className="text-xs text-slate-500">{c.desc}</p>
-                            </div>
-                        </motion.div>
-                    ))}
-                </motion.div>
+                {/* ── Chứng chỉ · Hoạt động gần đây ── */}
+                {data && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Chứng chỉ — tone xanh da trời (xác thực) */}
+                        <LiftCard tone="sky" watermark={BadgeCheck} className="p-6">
+                            <CardHeading
+                                tone="sky"
+                                icon={BadgeCheck}
+                                title="Chứng chỉ của tôi"
+                                subtitle="Cấp khi đạt bài kiểm tra cuối khóa · có mã xác thực"
+                                right={<span className={cn('px-2 py-1 rounded-lg text-[11px] font-bold tabular-nums', TONES.sky.soft)}>{data.stats.certificates}</span>}
+                                className="mb-4"
+                            />
+                            {data.certificates.length === 0 ? (
+                                <p className="text-sm text-fg-subtle py-6 text-center">Đạt bài kiểm tra cuối khóa để nhận chứng chỉ đầu tiên.</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {data.certificates.map((c) => (
+                                        <motion.li
+                                            key={c.id}
+                                            variants={pop}
+                                            whileHover={{ x: 3 }}
+                                            onClick={() => navigate(`/certificates/${c.courseId}`)}
+                                            className="flex items-center gap-3 rounded-xl border border-line-2 p-3 cursor-pointer transition-colors hover:border-sky-300/70 hover:bg-sky-50/40 dark:hover:bg-sky-500/5"
+                                        >
+                                            <span className={cn('w-10 h-10 rounded-xl bg-gradient-to-br text-white flex items-center justify-center flex-shrink-0', TONES.sky.tile)}>
+                                                <Award className="w-5 h-5" />
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-semibold text-fg truncate">{c.courseTitle}</p>
+                                                <p className="text-[11px] text-fg-subtle font-mono truncate">{c.certificateCode} · {new Date(c.issuedAt).toLocaleDateString('vi-VN')}</p>
+                                            </div>
+                                            <span className={cn('px-2 py-1 rounded-lg text-[11px] font-bold tabular-nums flex-shrink-0', TONES.sky.soft)}>{Math.round(c.scorePercentage)} điểm</span>
+                                        </motion.li>
+                                    ))}
+                                </ul>
+                            )}
+                        </LiftCard>
 
+                        {/* Hoạt động — tone hồng (nhịp hoạt động) */}
+                        <LiftCard tone="rose" watermark={Activity} className="p-6">
+                            <CardHeading tone="rose" icon={Activity} title="Hoạt động gần đây" subtitle="Bài học, quiz, chứng chỉ, ghi danh — mới nhất ở trên" className="mb-4" />
+                            {data.recent.length === 0 ? (
+                                <p className="text-sm text-fg-subtle py-6 text-center">Chưa có hoạt động nào. Bắt đầu một bài học nhé!</p>
+                            ) : (
+                                <ol>
+                                    {data.recent.map((e, i) => {
+                                        const m = EVENT_META[e.kind];
+                                        const last = i === data.recent.length - 1;
+                                        return (
+                                            <motion.li
+                                                key={`${e.kind}-${e.at}-${i}`}
+                                                initial={{ opacity: 0, x: -10 }}
+                                                whileInView={{ opacity: 1, x: 0 }}
+                                                viewport={{ once: true }}
+                                                transition={{ delay: i * 0.05 }}
+                                                className="relative flex gap-3 pb-3.5 last:pb-0"
+                                            >
+                                                {!last && <span className="absolute left-[15px] top-8 bottom-0 w-px bg-line" aria-hidden />}
+                                                <span className={cn('relative z-10 w-8 h-8 rounded-full border border-line flex items-center justify-center flex-shrink-0', m.cls)}>
+                                                    <m.icon className="w-3.5 h-3.5" />
+                                                </span>
+                                                <div className="min-w-0 flex-1 pt-1">
+                                                    <p className="text-sm text-fg-2 leading-snug">
+                                                        <span className="font-semibold text-fg">{m.label}</span> · {e.title}
+                                                        {e.kind === 'quiz' && e.value != null && (
+                                                            <span className={cn('ml-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold', e.passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                                                                {e.passed ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />} {Math.round(e.value)}%
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                    <p className="text-[11px] text-fg-subtle mt-0.5 truncate">{e.courseTitle} · {timeAgo(e.at)}</p>
+                                                </div>
+                                            </motion.li>
+                                        );
+                                    })}
+                                </ol>
+                            )}
+                        </LiftCard>
+                    </div>
+                )}
             </motion.div>
         </main>
+    );
+};
+
+/* ─────────────────────────────────────────────────────────────
+   Huy hiệu thành tích — tròn, đã đạt = huy chương vàng, chưa đạt = vòng tiến độ
+   ───────────────────────────────────────────────────────────── */
+
+const AchievementBadge: React.FC<{ a: Achievement }> = ({ a }) => {
+    const Icon = ACHIEVEMENT_ICON[a.id] ?? Star;
+    return (
+        <Tooltip
+            content={
+                <span className="block max-w-[180px]">
+                    <span className="block font-semibold">{a.label}</span>
+                    <span className="block opacity-80">{a.description}</span>
+                    {!a.earned && <span className="block mt-0.5 opacity-70">{a.progress}/{a.target}</span>}
+                </span>
+            }
+        >
+            <motion.button
+                variants={pop}
+                whileHover={{ scale: 1.08, y: -2 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                aria-label={`${a.label}: ${a.description}${a.earned ? ' (đã đạt)' : ` (${a.progress}/${a.target})`}`}
+                className="relative w-12 h-12 rounded-full flex items-center justify-center outline-none focus-visible:ring-4 focus-visible:ring-primary-500/25"
+            >
+                <span
+                    className={cn('absolute inset-0 rounded-full', a.earned && 'bg-gradient-to-br from-amber-200 to-orange-300 dark:from-amber-500/50 dark:to-orange-500/50')}
+                    style={a.earned ? undefined : {
+                        background: `conic-gradient(rgb(245 158 11) ${Math.round((a.progress / a.target) * 100)}%, rgb(var(--surface-3)) 0)`,
+                    }}
+                />
+                <span
+                    className={cn(
+                        'absolute inset-[3px] rounded-full flex items-center justify-center',
+                        a.earned
+                            ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_6px_14px_-4px_rgb(217_119_6/0.6)]'
+                            : 'bg-surface text-fg-subtle',
+                    )}
+                >
+                    <Icon className="w-[18px] h-[18px]" strokeWidth={a.earned ? 2.25 : 2} />
+                </span>
+                {!a.earned && (
+                    <span className="absolute -bottom-0.5 -right-0.5 w-[18px] h-[18px] rounded-full bg-surface border border-line flex items-center justify-center text-fg-subtle shadow-sm">
+                        <Lock className="w-2.5 h-2.5" />
+                    </span>
+                )}
+            </motion.button>
+        </Tooltip>
     );
 };
 
