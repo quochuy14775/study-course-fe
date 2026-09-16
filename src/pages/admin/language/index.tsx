@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, ChevronLeft, ChevronRight, Code2, LayoutGrid, List as ListIcon } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Code2, LayoutGrid, List as ListIcon } from 'lucide-react';
 import type { Language, LanguageRequest } from "../../../types/language";
 import languageService from "../../../services/languageService";
 import { showToast } from "../../../components/CustomToast";
 import { Tooltip } from "../../../components/ui/Tooltip";
-import { resolveLanguageBrand } from "../../../lib/techBrand";
+import { resolveLanguageBrand, tint, brandText } from "../../../lib/techBrand";
 import { cn } from "../../../lib/cn";
-import LanguageListItem from './LanguageListItem';
+import LanguageListItem, { LANGUAGE_ROW_COLS } from './LanguageListItem';
 import LanguageCard from './LanguageCard';
 import LanguageDialog from './LanguageDialog';
 
@@ -15,6 +15,21 @@ type Filter = 'all' | 'with' | 'without' | 'inactive';
 type View = 'grid' | 'list';
 
 const VIEW_KEY = 'admin-languages-view';
+
+/** Con nháy nhấp nháy của editor */
+const Caret: React.FC<{ className?: string }> = ({ className }) => (
+    <span className={cn('inline-block w-[7px] h-[1.1em] align-text-bottom bg-primary-500 dark:bg-primary-400 animate-blink', className)} aria-hidden />
+);
+
+/** Một dòng trong "file" header: số dòng ở gutter + nội dung. */
+const Line: React.FC<{ n: number; children: React.ReactNode; className?: string }> = ({ n, children, className }) => (
+    <div className={cn('relative pl-12 sm:pl-14 flex items-baseline gap-2 leading-7', className)}>
+        <span className="absolute left-0 w-10 sm:w-12 text-right pr-2 sm:pr-3 text-[11px] text-fg-subtle select-none tabular-nums leading-7" aria-hidden>
+            {String(n).padStart(2, '0')}
+        </span>
+        {children}
+    </div>
+);
 
 const LanguageManagement: React.FC = () => {
     const [languages, setLanguages] = useState<Language[]>([]);
@@ -110,143 +125,190 @@ const LanguageManagement: React.FC = () => {
         }
     };
 
-    const chips: Array<{ id: Filter; label: string }> = [
+    const tabs: Array<{ id: Filter; label: string }> = [
         { id: 'all', label: 'Tất cả' },
         { id: 'with', label: 'Có framework' },
         { id: 'without', label: 'Chưa có framework' },
         ...(counts.inactive > 0 ? [{ id: 'inactive' as Filter, label: 'Đang ẩn' }] : []),
     ];
 
+    const TOKEN_LIMIT = 10;
+
+    /* Nút chuyển lưới/danh sách + Thêm — dùng ở tab bar (sm+) và hàng riêng (mobile) */
+    const actions = (
+        <>
+            <div className="inline-flex items-center rounded-lg border border-line bg-surface p-0.5" role="tablist" aria-label="Kiểu hiển thị">
+                {([['grid', LayoutGrid, 'Lưới'], ['list', ListIcon, 'Danh sách']] as const).map(([v, Icon, label]) => (
+                    <Tooltip key={v} content={label} side="bottom">
+                        <button
+                            role="tab"
+                            aria-selected={view === v}
+                            aria-label={label}
+                            onClick={() => { setView(v); setPage(1); }}
+                            className={cn('relative w-8 h-7 rounded-md flex items-center justify-center transition-colors', view === v ? 'text-surface' : 'text-fg-muted hover:text-fg')}
+                        >
+                            {view === v && (
+                                <motion.span layoutId="lang-view-pill" className="absolute inset-0 rounded-md bg-fg" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />
+                            )}
+                            <Icon size={14} className="relative" />
+                        </button>
+                    </Tooltip>
+                ))}
+            </div>
+            <button
+                onClick={() => setModal({ open: true, language: null })}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-fg text-surface font-mono text-xs font-semibold hover:bg-primary-600 hover:text-white active:scale-95 transition-all"
+            >
+                <Plus size={14} /> Thêm ngôn ngữ
+            </button>
+        </>
+    );
+
     return (
         <main className="min-h-screen relative">
             <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
             <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
 
-                {/* ── Header ── */}
-                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4 mb-6 animate-fade-in-up">
-                    <section className="min-w-0">
-                        <div className="flex items-center gap-2 text-xs font-mono text-primary-600 dark:text-primary-300 mb-2">
-                            <span className="text-fg-subtle">~/</span>
-                            <span>management</span>
-                            <span className="text-fg-subtle">/</span>
-                            <span>languages</span>
-                            <span className="inline-block w-1.5 h-3 bg-primary-600 dark:bg-primary-300 animate-blink" />
+                {/* ── Header: cửa sổ editor ── */}
+                <section className="rounded-2xl border border-line bg-surface shadow-card overflow-hidden animate-fade-in-up">
+                    {/* Tab bar */}
+                    <div className="flex items-stretch h-11 pl-3 sm:pl-4 pr-2 sm:pr-3 bg-surface-2/70 border-b border-line">
+                        <span className="hidden sm:flex items-center gap-1.5 mr-3" aria-hidden>
+                            <span className="w-3 h-3 rounded-full bg-rose-400/80" />
+                            <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+                            <span className="w-3 h-3 rounded-full bg-emerald-400/80" />
+                        </span>
+                        <div className="relative flex items-center gap-2 px-3 bg-surface border-x border-line font-mono text-xs text-fg">
+                            <span className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary-500 to-accent-500" />
+                            <Code2 size={13} className="text-primary-600 dark:text-primary-300" />
+                            languages.ts
+                            {loading && <span className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse" title="Đang tải" />}
                         </div>
-                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-fg">Quản lý ngôn ngữ</h1>
-                        <p className="text-fg-muted mt-1 text-sm">Ngôn ngữ lập trình dùng trong các khóa học</p>
+                        <span className="hidden md:flex items-center px-3 font-mono text-[11px] text-fg-subtle">~/management/languages</span>
+                        <div className="ml-auto hidden sm:flex items-center gap-2">{actions}</div>
+                    </div>
 
-                        {/* Dải logo — mỗi cái viền màu thương hiệu riêng */}
-                        {languages.length > 0 && (
-                            <div className="mt-4 flex items-center gap-3">
-                                <div className="flex -space-x-2">
-                                    {languages.slice(0, 12).map((l, i) => {
+                    {/* Thân file: gutter + các dòng */}
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 w-10 sm:w-12 bg-surface-2/40 border-r border-line-2" aria-hidden />
+                        <div className="relative py-4 sm:py-5 pr-4 sm:pr-6 font-mono text-sm space-y-0.5">
+                            <Line n={1}>
+                                <span className="text-fg-subtle">{'//'}</span>
+                                <h1 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-fg leading-none">Quản lý ngôn ngữ</h1>
+                            </Line>
+                            <Line n={2}>
+                                <span className="text-fg-subtle">{'//'}</span>
+                                <p className="font-sans text-sm text-fg-muted">Ngôn ngữ lập trình dùng trong các khóa học</p>
+                            </Line>
+                            <Line n={3} className="mt-1">
+                                <span className="text-accent-600 dark:text-accent-300">const</span>
+                                <span className="text-fg">languages</span>
+                                <span className="text-fg-muted">=</span>
+                                <span className="text-fg-subtle">[</span>
+                            </Line>
+                            <Line n={4}>
+                                <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 pl-4 min-h-[1.75rem]">
+                                    {languages.length === 0 && !loading && (
+                                        <span className="text-fg-subtle italic text-xs">{'/* chưa có ngôn ngữ nào */'}</span>
+                                    )}
+                                    {loading && languages.length === 0 && (
+                                        <span className="text-fg-subtle text-xs animate-pulse">{'/* đang tải… */'}</span>
+                                    )}
+                                    {languages.slice(0, TOKEN_LIMIT).map((l, i) => {
                                         const b = brands.get(l.id)!;
                                         return (
-                                            <Tooltip key={l.id} content={l.name} side="bottom">
+                                            <React.Fragment key={l.id}>
                                                 <motion.button
-                                                    initial={{ opacity: 0, scale: 0.6 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    transition={{ delay: 0.05 + i * 0.04, type: 'spring', stiffness: 400, damping: 20 }}
-                                                    whileHover={{ y: -4, scale: 1.12, zIndex: 10 }}
+                                                    initial={{ opacity: 0, y: 4 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: 0.08 + i * 0.03, type: 'spring', stiffness: 400, damping: 24 }}
                                                     onClick={() => setModal({ open: true, language: l })}
-                                                    aria-label={l.name}
-                                                    className="relative w-9 h-9 rounded-full bg-surface flex items-center justify-center overflow-hidden ring-2 ring-surface"
-                                                    style={{ boxShadow: `0 0 0 2px ${b.color}` }}
+                                                    className="inline-flex items-center gap-1.5 h-7 px-1.5 rounded-md text-[13px] font-semibold transition-colors hover:bg-[color:var(--tok-soft)]"
+                                                    style={{ color: brandText(b.color), '--tok-soft': tint(b.color, 14) } as React.CSSProperties}
+                                                    title={`Sửa ${l.name}`}
                                                 >
                                                     {l.iconUrl
-                                                        ? <img src={l.iconUrl} alt="" className="w-5 h-5 object-contain" loading="lazy" />
-                                                        : <span className="text-[10px] font-mono font-black" style={{ color: b.color }}>{l.name.slice(0, 2).toUpperCase()}</span>}
+                                                        ? <img src={l.iconUrl} alt="" className={cn('w-3.5 h-3.5 object-contain', !l.isActive && 'grayscale')} loading="lazy" />
+                                                        : <span className="w-2 h-2 rounded-sm" style={{ background: b.color }} />}
+                                                    {l.name}
                                                 </motion.button>
-                                            </Tooltip>
+                                                {i < Math.min(languages.length, TOKEN_LIMIT) - 1 && <span className="text-fg-subtle">,</span>}
+                                            </React.Fragment>
                                         );
                                     })}
-                                    {languages.length > 12 && (
-                                        <span className="w-9 h-9 rounded-full bg-surface-2 text-fg-muted text-[10px] font-bold flex items-center justify-center ring-2 ring-surface">
-                                            +{languages.length - 12}
-                                        </span>
+                                    {languages.length > TOKEN_LIMIT && (
+                                        <span className="text-fg-subtle text-xs">, {'/* +'}{languages.length - TOKEN_LIMIT}{' */'}</span>
                                     )}
                                 </div>
+                            </Line>
+                            <Line n={5}>
+                                <span className="text-fg-subtle">];</span>
+                                <span className="text-fg-subtle">{'//'}</span>
                                 <span className="text-xs text-fg-muted">
                                     <span className="font-semibold text-fg">{languages.length}</span> ngôn ngữ · <span className="font-semibold text-fg">{totalFrameworks}</span> framework liên quan
                                 </span>
-                            </div>
-                        )}
-                    </section>
-
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <div className="inline-flex items-center rounded-xl border border-line bg-surface p-1 shadow-card" role="tablist" aria-label="Kiểu hiển thị">
-                            {([['grid', LayoutGrid, 'Lưới'], ['list', ListIcon, 'Danh sách']] as const).map(([v, Icon, label]) => (
-                                <Tooltip key={v} content={label} side="bottom">
-                                    <button
-                                        role="tab"
-                                        aria-selected={view === v}
-                                        aria-label={label}
-                                        onClick={() => { setView(v); setPage(1); }}
-                                        className={cn('relative w-9 h-8 rounded-lg flex items-center justify-center transition-colors', view === v ? 'text-white' : 'text-fg-muted hover:text-fg')}
-                                    >
-                                        {view === v && (
-                                            <motion.span layoutId="lang-view-pill" className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary-600 to-accent-600 shadow-glow-primary" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />
-                                        )}
-                                        <Icon size={16} className="relative" />
-                                    </button>
-                                </Tooltip>
-                            ))}
+                                <Caret />
+                            </Line>
                         </div>
-                        <button
-                            onClick={() => setModal({ open: true, language: null })}
-                            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-primary-600 to-accent-600 text-white font-semibold rounded-xl shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all"
-                        >
-                            <Plus size={18} /> Thêm ngôn ngữ
-                        </button>
                     </div>
-                </div>
+                </section>
 
-                {/* ── Tìm kiếm + lọc ── */}
-                <div className="mb-5 p-3 sm:p-4 bg-surface border border-line rounded-2xl shadow-card space-y-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle" size={16} />
+                {/* Hành động cho mobile */}
+                <div className="sm:hidden flex items-center justify-end gap-2 mt-3">{actions}</div>
+
+                {/* ── Tabs lọc + tìm kiếm ── */}
+                <div className="mt-6 flex flex-col md:flex-row md:items-end gap-3 border-b border-line">
+                    <div role="tablist" aria-label="Lọc ngôn ngữ" className="flex items-center gap-1 -mb-px overflow-x-auto">
+                        {tabs.map(tab => {
+                            const active = filter === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    role="tab"
+                                    aria-selected={active}
+                                    onClick={() => { setFilter(tab.id); setPage(1); }}
+                                    className={cn(
+                                        'relative px-3 py-2.5 font-mono text-xs font-semibold whitespace-nowrap transition-colors',
+                                        active ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                                    )}
+                                >
+                                    {tab.label}
+                                    <span className={cn('ml-1.5 tabular-nums', active ? 'text-primary-600 dark:text-primary-300' : 'text-fg-subtle')}>[{counts[tab.id]}]</span>
+                                    {active && (
+                                        <motion.span
+                                            layoutId="lang-filter-tab"
+                                            className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-primary-500 to-accent-500"
+                                            transition={{ type: 'spring', stiffness: 500, damping: 36 }}
+                                        />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="relative md:ml-auto md:w-80 pb-3 md:pb-2">
+                        <span className="absolute left-3 top-[calc(50%-6px)] md:top-[calc(50%-4px)] -translate-y-1/2 font-mono text-xs font-bold text-primary-600 dark:text-primary-300 select-none" aria-hidden>$</span>
                         <input
                             type="text"
-                            placeholder="Tìm theo tên hoặc slug..."
+                            placeholder="tìm theo tên hoặc slug…"
                             value={searchInput}
                             onChange={e => setSearchInput(e.target.value)}
-                            className="w-full pl-10 pr-3 py-2.5 bg-surface-2/60 border border-line rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:border-primary-400 focus:bg-surface focus:ring-4 focus:ring-primary-500/10 transition-all outline-none"
+                            aria-label="Tìm ngôn ngữ"
+                            className="w-full pl-8 pr-3 py-2 bg-surface-2/60 border border-line rounded-lg font-mono text-xs text-fg placeholder:text-fg-subtle focus:border-primary-400 focus:bg-surface focus:ring-4 focus:ring-primary-500/10 transition-all outline-none"
                         />
                     </div>
-                    {languages.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {chips.map(chip => {
-                                const active = filter === chip.id;
-                                return (
-                                    <button
-                                        key={chip.id}
-                                        onClick={() => { setFilter(chip.id); setPage(1); }}
-                                        className={cn(
-                                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all',
-                                            active ? 'bg-fg text-surface border-fg shadow-sm' : 'bg-surface text-fg-muted border-line hover:bg-surface-2',
-                                        )}
-                                    >
-                                        {chip.label}
-                                        <span className={cn('tabular-nums', active ? 'opacity-70' : 'text-fg-subtle')}>{counts[chip.id]}</span>
-                                    </button>
-                                );
-                            })}
-                            {searchQuery && (
-                                <span className="ml-auto text-xs text-fg-muted"><span className="font-semibold text-fg">{filtered.length}</span> kết quả</span>
-                            )}
-                        </div>
-                    )}
                 </div>
 
                 {/* ── Đếm ── */}
-                <div className="mb-4 text-sm text-fg-muted flex justify-between items-center">
+                <div className="mt-3 mb-4 flex justify-between items-center font-mono text-xs text-fg-muted">
                     <div>
-                        Hiển thị <span className="font-semibold text-fg">{paginated.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</span> đến <span className="font-semibold text-fg">{Math.min(page * PAGE_SIZE, filtered.length)}</span> trong <span className="font-semibold text-fg">{filtered.length}</span> ngôn ngữ
+                        <span className="text-fg-subtle">{'//'}</span> hiển thị <span className="font-semibold text-fg">{paginated.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</span>–<span className="font-semibold text-fg">{Math.min(page * PAGE_SIZE, filtered.length)}</span> trong <span className="font-semibold text-fg">{filtered.length}</span> ngôn ngữ
+                        {searchQuery && <span className="text-fg-subtle"> · khớp "{searchQuery}"</span>}
                     </div>
                     {loading && (
-                        <div className="flex items-center gap-2 text-primary-600 text-xs font-semibold animate-pulse">
-                            <div className="w-1.5 h-1.5 bg-primary-600 rounded-full animate-bounce" />
-                            ĐANG CẬP NHẬT...
+                        <div className="flex items-center gap-1.5 text-primary-600 dark:text-primary-300 animate-pulse">
+                            <span className="w-1.5 h-1.5 bg-current rounded-full" />
+                            đang tải…
                         </div>
                     )}
                 </div>
@@ -263,21 +325,38 @@ const LanguageManagement: React.FC = () => {
                                     ))}
                                 </motion.div>
                             ) : (
-                                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="space-y-3">
-                                    {paginated.map(lang => (
-                                        <LanguageListItem key={lang.id} language={lang} onEdit={(l) => setModal({ open: true, language: l })} onDelete={handleDelete} />
-                                    ))}
+                                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                    className="rounded-xl border border-line bg-surface shadow-card overflow-hidden">
+                                    {/* Hàng tiêu đề kiểu chú thích */}
+                                    <div className={cn('hidden md:grid items-center gap-x-3 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-fg-subtle bg-surface-2/60 border-b border-line', LANGUAGE_ROW_COLS)}>
+                                        <span className="text-right pr-1">#</span>
+                                        <span>ngôn ngữ</span>
+                                        <span>frameworks</span>
+                                        <span>active</span>
+                                        <span>tạo lúc</span>
+                                        <span />
+                                    </div>
+                                    <div className="divide-y divide-line-2">
+                                        {paginated.map((lang, i) => (
+                                            <LanguageListItem
+                                                key={lang.id}
+                                                language={lang}
+                                                index={(page - 1) * PAGE_SIZE + i}
+                                                onEdit={(l) => setModal({ open: true, language: l })}
+                                                onDelete={handleDelete}
+                                            />
+                                        ))}
+                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     ) : (
                         !loading && (
-                            <div className="text-center py-12 bg-surface border-2 border-dashed border-line rounded-3xl shadow-card">
-                                <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Code2 className="w-8 h-8 text-fg-subtle" />
-                                </div>
-                                <h3 className="text-lg font-bold text-fg">Không tìm thấy ngôn ngữ nào</h3>
-                                <p className="text-fg-muted text-sm">Thử đổi từ khóa, bỏ lọc hoặc thêm mới</p>
+                            <div className="rounded-xl border-2 border-dashed border-line bg-surface shadow-card px-6 py-10 font-mono text-sm">
+                                <div className="text-fg-subtle">{'/**'}</div>
+                                <div className="pl-3 text-fg font-semibold"><span className="text-fg-subtle">* </span>Không tìm thấy ngôn ngữ nào</div>
+                                <div className="pl-3 text-fg-muted"><span className="text-fg-subtle">* </span>Thử đổi từ khóa, bỏ lọc hoặc thêm mới</div>
+                                <div className="text-fg-subtle">{'*/'} <Caret /></div>
                             </div>
                         )
                     )}
@@ -285,17 +364,22 @@ const LanguageManagement: React.FC = () => {
 
                 {/* ── Phân trang ── */}
                 {filtered.length > PAGE_SIZE && (
-                    <div className="flex justify-between items-center mt-8 pt-6 border-t border-line">
-                        <div className="text-sm text-fg-muted">
-                            Trang <span className="font-semibold text-fg">{page}</span> / <span className="font-semibold text-fg">{totalPages}</span>
+                    <div className="flex justify-between items-center mt-8 pt-5 border-t border-line font-mono text-xs text-fg-muted">
+                        <div>
+                            <span className="text-fg-subtle">{'//'}</span> trang <span className="font-semibold text-fg">{page}</span> / {totalPages}
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setPage(p => p - 1)} disabled={page === 1 || loading} className="p-2 border border-line rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <ChevronLeft size={18} />
-                            </button>
-                            <button onClick={() => setPage(p => p + 1)} disabled={page === totalPages || loading} className="p-2 border border-line rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <ChevronRight size={18} />
-                            </button>
+                        <div className="flex gap-1.5">
+                            {([['prev', ChevronLeft, page === 1, () => setPage(p => p - 1)], ['next', ChevronRight, page === totalPages, () => setPage(p => p + 1)]] as const).map(([k, Icon, disabled, go]) => (
+                                <button
+                                    key={k}
+                                    onClick={go}
+                                    disabled={disabled || loading}
+                                    aria-label={k === 'prev' ? 'Trang trước' : 'Trang sau'}
+                                    className="w-8 h-8 rounded-md border border-line bg-surface text-fg-muted shadow-[0_2px_0_rgb(var(--line))] hover:text-fg hover:border-fg-subtle active:translate-y-px active:shadow-none disabled:opacity-40 disabled:cursor-not-allowed disabled:active:translate-y-0 disabled:active:shadow-[0_2px_0_rgb(var(--line))] transition-all flex items-center justify-center"
+                                >
+                                    <Icon size={15} />
+                                </button>
+                            ))}
                         </div>
                     </div>
                 )}

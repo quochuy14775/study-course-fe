@@ -1,158 +1,141 @@
 import React from 'react';
-import { Edit2, Trash2, Calendar, Code2 } from 'lucide-react';
+import { Edit2, Trash2, Code2 } from 'lucide-react';
 import type { Language } from '../../../types/language';
-import { resolveLanguageBrand, resolveFrameworkBrand, tint } from '../../../lib/techBrand';
+import { resolveLanguageBrand, resolveFrameworkBrand, tint, brandText } from '../../../lib/techBrand';
+import { Tooltip } from '../../../components/ui/Tooltip';
 import { cn } from '../../../lib/cn';
 
 interface Props {
     language: Language;
+    /** Thứ tự trong danh sách (0-based) — hiện làm số dòng ở gutter */
+    index: number;
     onEdit?: (language: Language) => void;
     onDelete?: (id: number) => void;
 }
 
+/** Cột của hàng — phải khớp với header trong trang (md+). */
+export const LANGUAGE_ROW_COLS =
+    'grid-cols-[2.25rem_minmax(0,1fr)_auto] md:grid-cols-[2.5rem_minmax(0,1.25fr)_minmax(0,2fr)_4.5rem_5.5rem_3.75rem]';
+
 /**
- * Card ngôn ngữ mang màu thương hiệu (JavaScript vàng, TypeScript xanh, Python xanh dương…):
- * thanh viền trái, nền icon, viền/glow khi hover; framework đi kèm hiện chấm màu riêng của chúng.
+ * Một "dòng code" trong editor: số dòng ở gutter, logo + tên, rồi `=> [React, Vue, …]`,
+ * `true/false`, ngày tạo. Hover tô nền màu thương hiệu nhạt như đang chọn dòng, số dòng đổi màu.
  */
-const LanguageListItem: React.FC<Props> = ({ language, onEdit, onDelete }) => {
+const LanguageListItem: React.FC<Props> = ({ language, index, onEdit, onDelete }) => {
     const brand = resolveLanguageBrand(language);
     const initials = language.name.slice(0, 2).toUpperCase();
     const vars = {
         '--brand': brand.color,
-        '--brand-soft': tint(brand.color, 12),
+        '--brand-text': brandText(brand.color),
+        '--brand-soft': tint(brand.color, 10),
         '--brand-line': tint(brand.color, 45),
-        '--brand-glow': tint(brand.color, 28),
     } as React.CSSProperties;
+    const fws = language.frameworks ?? [];
 
     return (
         <div
             style={vars}
             className={cn(
-                'group relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card',
-                'transition-[border-color,box-shadow,transform] duration-300',
-                'hover:-translate-y-0.5 hover:border-[color:var(--brand-line)] hover:shadow-[0_14px_32px_-14px_var(--brand-glow)]',
-                !language.isActive && 'opacity-75 hover:opacity-100',
+                'group relative grid items-center gap-x-3 gap-y-1.5 px-3 py-2.5 font-mono transition-colors',
+                LANGUAGE_ROW_COLS,
+                'hover:bg-[color:var(--brand-soft)]',
+                !language.isActive && 'opacity-70 hover:opacity-100',
             )}
         >
-            <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full" style={{ background: brand.color }} aria-hidden />
+            {/* Thanh chọn dòng bên trái */}
+            <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: brand.color }} aria-hidden />
 
-            {language.iconUrl ? (
-                <img
-                    src={language.iconUrl}
-                    alt=""
-                    aria-hidden
-                    className="pointer-events-none absolute right-20 -bottom-5 w-28 h-28 object-contain opacity-[0.06] grayscale transition-all duration-500 group-hover:opacity-[0.14] group-hover:grayscale-0 group-hover:-rotate-6"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-            ) : (
+            {/* Số dòng */}
+            <span className="text-[11px] text-fg-subtle tabular-nums text-right pr-1 select-none transition-colors group-hover:text-[color:var(--brand-text)] group-hover:font-bold" aria-hidden>
+                {String(index + 1).padStart(2, '0')}
+            </span>
+
+            {/* Logo + tên + slug */}
+            <div className="flex items-center gap-2.5 min-w-0">
                 <span
-                    className="pointer-events-none absolute right-24 -bottom-4 font-black text-[84px] leading-none opacity-[0.05] select-none transition-opacity duration-500 group-hover:opacity-[0.09]"
-                    style={{ color: brand.color }}
-                    aria-hidden
-                >
-                    {initials.charAt(0)}
-                </span>
-            )}
-
-            <div className="relative flex items-center gap-4 p-4 pl-5">
-                <div
-                    className="relative w-14 h-14 flex-shrink-0 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105"
-                    style={{ background: 'var(--brand-soft)', boxShadow: 'inset 0 0 0 1px var(--brand-line)' }}
+                    className={cn('w-8 h-8 flex-shrink-0 rounded-md flex items-center justify-center overflow-hidden', !language.isActive && 'grayscale')}
+                    style={{ background: tint(brand.color, 12), boxShadow: 'inset 0 0 0 1px var(--brand-line)' }}
                 >
                     {language.iconUrl ? (
-                        <img
-                            src={language.iconUrl}
-                            alt={language.name}
-                            className="w-full h-full object-contain p-2"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
+                        <img src={language.iconUrl} alt={language.name} className="w-5 h-5 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     ) : brand.source !== 'hash' ? (
-                        <span className="font-black text-lg tracking-tight" style={{ color: brand.color }}>{initials}</span>
+                        <span className="font-black text-xs" style={{ color: 'var(--brand-text)' }}>{initials}</span>
                     ) : (
-                        <Code2 className="w-6 h-6" style={{ color: brand.color }} />
+                        <Code2 className="w-4 h-4" style={{ color: 'var(--brand-text)' }} />
                     )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <h3 className="font-bold text-fg truncate transition-colors group-hover:text-[color:var(--brand)]">
-                            {language.name}
-                        </h3>
-                        <span className="font-mono text-[10px] text-fg-subtle bg-surface-2 border border-line px-1.5 py-0.5 rounded">
-                            {language.slug}
-                        </span>
-                        {language.isActive ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300 text-[10px] font-bold">
-                                <span className="w-1 h-1 rounded-full bg-emerald-500" />
-                                ACTIVE
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-2 text-fg-muted text-[10px] font-bold">
-                                <span className="w-1 h-1 rounded-full bg-fg-subtle" />
-                                INACTIVE
-                            </span>
-                        )}
+                </span>
+                <div className="min-w-0 leading-tight">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <h3 className="font-sans font-bold text-sm text-fg truncate transition-colors group-hover:text-[color:var(--brand-text)]">{language.name}</h3>
+                        {/* Trạng thái rút gọn cho mobile */}
+                        <span className={cn('md:hidden w-1.5 h-1.5 rounded-full flex-shrink-0', language.isActive ? 'bg-emerald-500' : 'bg-fg-subtle')} aria-label={language.isActive ? 'Đang hoạt động' : 'Đang ẩn'} />
                     </div>
+                    <div className="text-[10px] truncate">
+                        <span className="text-fg-subtle">slug: </span>
+                        <span className="text-code-600 dark:text-code-400">"{language.slug}"</span>
+                    </div>
+                </div>
+            </div>
 
-                    {/* Framework chips — mỗi framework một chấm màu thương hiệu riêng */}
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                        {language.frameworks?.length > 0 ? (
-                            <>
-                                <span className="text-[10px] uppercase tracking-wider text-fg-subtle font-semibold mr-0.5">Framework</span>
-                                {language.frameworks.slice(0, 5).map((fw) => {
-                                    const fb = resolveFrameworkBrand(fw);
-                                    return (
-                                        <span
-                                            key={fw.id}
-                                            className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-md bg-surface-2 border border-line text-[10px] font-semibold text-fg-2"
-                                        >
+            {/* Frameworks — hàng 2 trên mobile, cột riêng trên md+ */}
+            <div className="col-start-2 col-span-2 md:col-start-auto md:col-span-1 flex flex-wrap items-center gap-1 min-w-0 text-[11px]">
+                <span className="text-fg-subtle">=&gt;</span>
+                <span className="text-fg-subtle">[</span>
+                {fws.length > 0 ? (
+                    <>
+                        {fws.slice(0, 5).map((fw, i) => {
+                            const fb = resolveFrameworkBrand(fw);
+                            return (
+                                <React.Fragment key={fw.id}>
+                                    <Tooltip content={fw.name} side="top">
+                                        <span className="inline-flex items-center gap-1 pl-1 pr-1.5 h-5 rounded bg-surface-2 border border-line text-[10px] font-semibold text-fg-2">
                                             {fw.iconUrl
                                                 ? <img src={fw.iconUrl} alt="" className="w-3 h-3 object-contain" loading="lazy" />
-                                                : <span className="w-2 h-2 rounded-full" style={{ background: fb.color }} />}
+                                                : <span className="w-1.5 h-1.5 rounded-sm" style={{ background: fb.color }} />}
                                             {fw.name}
                                         </span>
-                                    );
-                                })}
-                                {language.frameworks.length > 5 && (
-                                    <span className="px-2 py-0.5 bg-surface-2 text-fg-muted rounded-md text-[10px]">
-                                        +{language.frameworks.length - 5}
-                                    </span>
-                                )}
-                            </>
-                        ) : (
-                            <span className="text-[11px] text-fg-subtle italic">Chưa có framework</span>
-                        )}
-                    </div>
+                                    </Tooltip>
+                                    {i < Math.min(fws.length, 5) - 1 && <span className="text-fg-subtle">,</span>}
+                                </React.Fragment>
+                            );
+                        })}
+                        {fws.length > 5 && <span className="text-fg-subtle">, …+{fws.length - 5}</span>}
+                    </>
+                ) : (
+                    <span className="text-fg-subtle italic">{'/* chưa có */'}</span>
+                )}
+                <span className="text-fg-subtle">]</span>
+            </div>
 
-                    <div className="flex items-center gap-3 mt-2 text-[11px] text-fg-subtle font-mono">
-                        <span className="flex items-center gap-1">
-                            <Calendar size={10} />
-                            {new Date(language.createdAt).toLocaleDateString('vi-VN')}
-                        </span>
-                        {language.frameworks?.length > 0 && <span>· {language.frameworks.length} framework</span>}
-                    </div>
-                </div>
+            {/* Trạng thái */}
+            <div className="hidden md:flex items-center gap-1.5 text-[11px]">
+                <span className={cn('w-1.5 h-1.5 rounded-full', language.isActive ? 'bg-emerald-500' : 'bg-fg-subtle')} />
+                {language.isActive
+                    ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">true</span>
+                    : <span className="text-fg-muted font-semibold">false</span>}
+            </div>
 
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {onEdit && (
-                        <button
-                            onClick={() => onEdit(language)}
-                            className="p-2 rounded-lg text-fg-subtle hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-500/15 transition-colors"
-                            title="Sửa ngôn ngữ"
-                        >
-                            <Edit2 size={14} />
+            {/* Ngày tạo */}
+            <div className="hidden md:block text-[11px] text-fg-subtle tabular-nums">
+                {new Date(language.createdAt).toLocaleDateString('vi-VN')}
+            </div>
+
+            {/* Hành động */}
+            <div className="flex justify-end gap-0.5 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                {onEdit && (
+                    <Tooltip content="Sửa" side="top">
+                        <button onClick={() => onEdit(language)} className="w-7 h-7 rounded-md text-fg-subtle hover:text-primary-600 hover:bg-surface flex items-center justify-center transition-colors" aria-label="Sửa ngôn ngữ">
+                            <Edit2 size={13} />
                         </button>
-                    )}
-                    {onDelete && (
-                        <button
-                            onClick={() => onDelete(language.id)}
-                            className="p-2 rounded-lg text-fg-subtle hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/15 transition-colors"
-                            title="Xóa ngôn ngữ"
-                        >
-                            <Trash2 size={14} />
+                    </Tooltip>
+                )}
+                {onDelete && (
+                    <Tooltip content="Xóa" side="top">
+                        <button onClick={() => onDelete(language.id)} className="w-7 h-7 rounded-md text-fg-subtle hover:text-rose-600 hover:bg-surface flex items-center justify-center transition-colors" aria-label="Xóa ngôn ngữ">
+                            <Trash2 size={13} />
                         </button>
-                    )}
-                </div>
+                    </Tooltip>
+                )}
             </div>
         </div>
     );

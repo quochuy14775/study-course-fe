@@ -1,20 +1,37 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, ChevronLeft, ChevronRight, Layers, LayoutGrid, List as ListIcon } from 'lucide-react';
+import { Plus, Search, ChevronLeft, ChevronRight, Layers, LayoutGrid, List as ListIcon, Check } from 'lucide-react';
 import type { Framework, FrameworkRequest } from "../../../types/framework";
 import frameworkService from "../../../services/frameworkService";
 import { showToast } from "../../../components/CustomToast";
 import { Tooltip } from "../../../components/ui/Tooltip";
-import { resolveFrameworkBrand, CATEGORIES, CATEGORY_COLOR, CATEGORY_LABEL, onBrand, type TechCategory } from "../../../lib/techBrand";
+import { resolveFrameworkBrand, CATEGORIES, CATEGORY_COLOR, CATEGORY_LABEL, tint, type TechCategory } from "../../../lib/techBrand";
 import { cn } from "../../../lib/cn";
 import FrameworkListItem from './FrameworkListItem';
 import FrameworkCard from './FrameworkCard';
 import FrameworkDialog from './FrameworkDialog';
 
-type CategoryFilter = 'all' | TechCategory | 'none';
+type GroupKey = TechCategory | 'none';
+type CategoryFilter = 'all' | GroupKey;
 type View = 'grid' | 'list';
 
 const VIEW_KEY = 'admin-frameworks-view';
+
+/** Thứ tự nhóm khi sắp xếp / hiện section: theo bảng CATEGORIES, "chưa phân nhóm" cuối cùng */
+const GROUP_ORDER: GroupKey[] = [...CATEGORIES, 'none'];
+
+const groupColor = (k: CategoryFilter): string =>
+    k === 'all' ? 'rgb(var(--color-primary-500))'
+    : k === 'none' ? 'rgb(var(--fg-subtle))'
+    : CATEGORY_COLOR[k];
+
+const groupLabel = (k: CategoryFilter): string =>
+    k === 'all' ? 'Tất cả' : k === 'none' ? 'Chưa phân nhóm' : CATEGORY_LABEL[k];
+
+/** Mốc góc kiểu bản vẽ cho ô trống */
+const Corner: React.FC<{ className: string }> = ({ className }) => (
+    <span className={cn('absolute w-4 h-4 border-line-2', className)} aria-hidden />
+);
 
 const FrameworkManagement: React.FC = () => {
     const [frameworks, setFrameworks] = useState<Framework[]>([]);
@@ -53,34 +70,54 @@ const FrameworkManagement: React.FC = () => {
         try { localStorage.setItem(VIEW_KEY, view); } catch { /* ignore */ }
     }, [view]);
 
-    // Nhóm đã resolve (DB → bảng) cho từng framework, dùng cho lọc + đếm
+    // Nhóm đã resolve (DB → bảng) cho từng framework, dùng cho lọc + đếm + sắp xếp
     const resolved = useMemo(
         () => new Map(frameworks.map(f => [f.id, resolveFrameworkBrand(f)])),
         [frameworks],
     );
+    const groupOf = useCallback((f: Framework): GroupKey => resolved.get(f.id)?.category ?? 'none', [resolved]);
 
-    const counts = useMemo(() => {
-        const c: Record<string, number> = { all: frameworks.length, none: 0 };
-        CATEGORIES.forEach(k => { c[k] = 0; });
+    /** Framework theo từng nhóm (để đếm + hiện logo trên thẻ nhóm) */
+    const byGroup = useMemo(() => {
+        const m = new Map<GroupKey, Framework[]>();
         frameworks.forEach(f => {
-            const cat = resolved.get(f.id)?.category;
-            c[cat ?? 'none'] += 1;
+            const k = groupOf(f);
+            if (!m.has(k)) m.set(k, []);
+            m.get(k)!.push(f);
         });
-        return c;
-    }, [frameworks, resolved]);
+        return m;
+    }, [frameworks, groupOf]);
 
+    const activeGroups = GROUP_ORDER.filter(k => (byGroup.get(k)?.length ?? 0) > 0);
+
+    /** Lọc rồi sắp theo nhóm → tên, để các section liền nhau khi phân trang */
     const filtered = useMemo(() => {
         const q = searchQuery.toLowerCase();
-        return frameworks.filter(f => {
-            if (q && !(f.name.toLowerCase().includes(q) || f.slug.toLowerCase().includes(q))) return false;
-            if (category === 'all') return true;
-            const cat = resolved.get(f.id)?.category;
-            return category === 'none' ? !cat : cat === category;
-        });
-    }, [frameworks, searchQuery, category, resolved]);
+        return frameworks
+            .filter(f => {
+                if (q && !(f.name.toLowerCase().includes(q) || f.slug.toLowerCase().includes(q))) return false;
+                return category === 'all' || groupOf(f) === category;
+            })
+            .sort((a, b) => {
+                const d = GROUP_ORDER.indexOf(groupOf(a)) - GROUP_ORDER.indexOf(groupOf(b));
+                return d !== 0 ? d : a.name.localeCompare(b.name, 'vi');
+            });
+    }, [frameworks, searchQuery, category, groupOf]);
 
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+
+    /** Trang hiện tại chia theo nhóm — chỉ hiện tiêu đề section khi đang xem "Tất cả" */
+    const sections = useMemo(() => {
+        const m = new Map<GroupKey, Framework[]>();
+        paginated.forEach(f => {
+            const k = groupOf(f);
+            if (!m.has(k)) m.set(k, []);
+            m.get(k)!.push(f);
+        });
+        return GROUP_ORDER.filter(k => m.has(k)).map(k => ({ key: k, items: m.get(k)! }));
+    }, [paginated, groupOf]);
+    const showSectionHeaders = category === 'all' && sections.length > 1;
 
     const handleCreateOrUpdate = async (data: FrameworkRequest) => {
         try {
@@ -110,71 +147,49 @@ const FrameworkManagement: React.FC = () => {
         }
     };
 
-    const chips: Array<{ id: CategoryFilter; label: string; color?: string }> = [
-        { id: 'all', label: 'Tất cả' },
-        ...CATEGORIES.filter(c => counts[c] > 0).map(c => ({ id: c as CategoryFilter, label: CATEGORY_LABEL[c], color: CATEGORY_COLOR[c] })),
-        ...(counts.none > 0 ? [{ id: 'none' as CategoryFilter, label: 'Chưa phân nhóm' }] : []),
-    ];
+    const tiles: CategoryFilter[] = ['all', ...activeGroups];
+
+    const SectionHeader: React.FC<{ k: GroupKey; count: number; className?: string }> = ({ k, count, className }) => {
+        const color = groupColor(k);
+        return (
+            <div className={cn('flex items-center gap-3', className)}>
+                <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color }}>{groupLabel(k)}</span>
+                <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
+                <span className="flex-1 h-px" style={{ background: `linear-gradient(to right, ${tint(color, 45)}, transparent)` }} />
+            </div>
+        );
+    };
 
     return (
         <main className="min-h-screen relative">
-            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
+            {/* Nền blueprint: chấm + vệt mesh nhạt phía trên */}
+            <div className="absolute inset-0 bg-dot-pattern bg-dot pointer-events-none [mask-image:linear-gradient(to_bottom,black_0%,black_55%,transparent_100%)]" />
+            <div className="absolute inset-x-0 top-0 h-96 bg-gradient-mesh pointer-events-none opacity-70" />
+
             <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
 
                 {/* ── Header ── */}
-                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-4 mb-6 animate-fade-in-up">
-                    <section className="min-w-0">
-                        <div className="flex items-center gap-2 text-xs font-mono text-primary-600 dark:text-primary-300 mb-2">
-                            <span className="text-fg-subtle">~/</span>
-                            <span>management</span>
-                            <span className="text-fg-subtle">/</span>
-                            <span>frameworks</span>
-                            <span className="inline-block w-1.5 h-3 bg-primary-600 dark:bg-primary-300 animate-blink" />
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 animate-fade-in-up">
+                    <div className="min-w-0">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-line bg-surface/80 backdrop-blur text-[10px] font-bold uppercase tracking-[0.18em] text-primary-600 dark:text-primary-300 shadow-card">
+                            <Layers size={12} />
+                            Stack
+                            <span className="w-px h-3 bg-line" aria-hidden />
+                            <span className="text-fg-muted normal-case tracking-normal font-semibold">
+                                {frameworks.length} framework · {activeGroups.filter(k => k !== 'none').length} nhóm
+                            </span>
                         </div>
-                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-fg">Quản lý Framework</h1>
-                        <p className="text-fg-muted mt-1 text-sm">Framework và thư viện dùng trong các khóa học</p>
-
-                        {/* Dải logo — mỗi cái viền màu thương hiệu riêng */}
-                        {frameworks.length > 0 && (
-                            <div className="mt-4 flex items-center gap-3">
-                                <div className="flex -space-x-2">
-                                    {frameworks.slice(0, 12).map((f, i) => {
-                                        const b = resolved.get(f.id)!;
-                                        return (
-                                            <Tooltip key={f.id} content={f.name} side="bottom">
-                                                <motion.button
-                                                    initial={{ opacity: 0, scale: 0.6 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    transition={{ delay: 0.05 + i * 0.04, type: 'spring', stiffness: 400, damping: 20 }}
-                                                    whileHover={{ y: -4, scale: 1.12, zIndex: 10 }}
-                                                    onClick={() => setModal({ open: true, framework: f })}
-                                                    aria-label={f.name}
-                                                    className="relative w-9 h-9 rounded-full bg-surface flex items-center justify-center overflow-hidden ring-2 ring-surface"
-                                                    style={{ boxShadow: `0 0 0 2px ${b.color}` }}
-                                                >
-                                                    {f.iconUrl
-                                                        ? <img src={f.iconUrl} alt="" className="w-5 h-5 object-contain" loading="lazy" />
-                                                        : <span className="text-[10px] font-black" style={{ color: b.color }}>{f.name.slice(0, 2).toUpperCase()}</span>}
-                                                </motion.button>
-                                            </Tooltip>
-                                        );
-                                    })}
-                                    {frameworks.length > 12 && (
-                                        <span className="w-9 h-9 rounded-full bg-surface-2 text-fg-muted text-[10px] font-bold flex items-center justify-center ring-2 ring-surface">
-                                            +{frameworks.length - 12}
-                                        </span>
-                                    )}
-                                </div>
-                                <span className="text-xs text-fg-muted">
-                                    <span className="font-semibold text-fg">{frameworks.length}</span> framework · {CATEGORIES.filter(c => counts[c] > 0).length} nhóm
-                                </span>
-                            </div>
-                        )}
-                    </section>
+                        <h1 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-fg">
+                            Quản lý <span className="bg-gradient-to-r from-primary-600 to-accent-600 dark:from-primary-400 dark:to-accent-400 bg-clip-text text-transparent">Framework</span>
+                        </h1>
+                        <p className="mt-2 text-sm text-fg-muted max-w-xl">
+                            Framework và thư viện dùng trong các khóa học — xếp theo nhóm, mỗi cái đứng trên nền ngôn ngữ của nó.
+                        </p>
+                    </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
-                        {/* Chuyển lưới / danh sách */}
-                        <div className="inline-flex items-center rounded-xl border border-line bg-surface p-1 shadow-card" role="tablist" aria-label="Kiểu hiển thị">
+                        <div className="inline-flex items-center rounded-full border border-line bg-surface p-1 shadow-card" role="tablist" aria-label="Kiểu hiển thị">
                             {([['grid', LayoutGrid, 'Lưới'], ['list', ListIcon, 'Danh sách']] as const).map(([v, Icon, label]) => (
                                 <Tooltip key={v} content={label} side="bottom">
                                     <button
@@ -182,10 +197,10 @@ const FrameworkManagement: React.FC = () => {
                                         aria-selected={view === v}
                                         aria-label={label}
                                         onClick={() => { setView(v); setPage(1); }}
-                                        className={cn('relative w-9 h-8 rounded-lg flex items-center justify-center transition-colors', view === v ? 'text-white' : 'text-fg-muted hover:text-fg')}
+                                        className={cn('relative w-9 h-8 rounded-full flex items-center justify-center transition-colors', view === v ? 'text-surface' : 'text-fg-muted hover:text-fg')}
                                     >
                                         {view === v && (
-                                            <motion.span layoutId="fw-view-pill" className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary-600 to-accent-600 shadow-glow-primary" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />
+                                            <motion.span layoutId="fw-view-pill" className="absolute inset-0 rounded-full bg-fg" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />
                                         )}
                                         <Icon size={16} className="relative" />
                                     </button>
@@ -194,113 +209,152 @@ const FrameworkManagement: React.FC = () => {
                         </div>
                         <button
                             onClick={() => setModal({ open: true, framework: null })}
-                            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-accent-600 to-primary-600 text-white font-semibold rounded-xl shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all"
+                            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 text-white text-sm font-semibold shadow-glow-primary hover:shadow-glow-accent hover:scale-[1.02] active:scale-95 transition-all"
                         >
-                            <Plus size={18} /> Thêm framework
+                            <Plus size={17} /> Thêm framework
                         </button>
                     </div>
                 </div>
 
-                {/* ── Tìm kiếm + lọc nhóm ── */}
-                <div className="mb-5 p-3 sm:p-4 bg-surface border border-line rounded-2xl shadow-card space-y-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle" size={16} />
+                {/* ── Rail thẻ nhóm (hero + filter) ── */}
+                {frameworks.length > 0 && (
+                    <div className="mt-6 -mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0">
+                        <div className="flex gap-3 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]" role="tablist" aria-label="Lọc theo nhóm">
+                            {tiles.map((k, i) => {
+                                const active = category === k;
+                                const color = groupColor(k);
+                                const items = k === 'all' ? frameworks : (byGroup.get(k) ?? []);
+                                return (
+                                    <motion.button
+                                        key={k}
+                                        role="tab"
+                                        aria-selected={active}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.05 + i * 0.04, type: 'spring', stiffness: 320, damping: 26 }}
+                                        whileHover={{ y: -3 }}
+                                        onClick={() => { setCategory(k); setPage(1); }}
+                                        className={cn(
+                                            'relative w-40 flex-shrink-0 sm:w-auto text-left rounded-2xl border bg-surface p-3.5 shadow-card overflow-hidden',
+                                            'transition-[border-color,box-shadow,background-color] duration-300',
+                                            active ? 'shadow-[0_14px_30px_-14px_var(--cat-glow)]' : 'border-line hover:border-[color:var(--cat-line)]',
+                                        )}
+                                        style={{
+                                            '--cat-line': tint(color, 45),
+                                            '--cat-glow': tint(color, 40),
+                                            borderColor: active ? color : undefined,
+                                            background: active ? tint(color, 8) : undefined,
+                                        } as React.CSSProperties}
+                                    >
+                                        {/* Thanh nhận diện nhóm */}
+                                        <span className="absolute left-3.5 top-4 w-1 h-7 rounded-full" style={{ background: color }} aria-hidden />
+
+                                        <div className="pl-3.5">
+                                            <div className="flex items-center justify-between gap-1">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color }}>{groupLabel(k)}</span>
+                                                {active && <Check size={12} strokeWidth={3} style={{ color }} />}
+                                            </div>
+                                            <div className="mt-0.5 text-2xl font-extrabold tabular-nums leading-none text-fg">{items.length}</div>
+
+                                            {/* Logo xếp chồng — ô vuông bo góc */}
+                                            <div className="mt-3 flex -space-x-1.5 h-6">
+                                                {items.slice(0, 4).map(f => {
+                                                    const b = resolved.get(f.id)!;
+                                                    return (
+                                                        <span
+                                                            key={f.id}
+                                                            className="w-6 h-6 rounded-md bg-surface ring-2 ring-surface flex items-center justify-center overflow-hidden text-[8px] font-black"
+                                                            style={{ boxShadow: `0 0 0 1px ${tint(b.color, 60)}`, color: b.color }}
+                                                            title={f.name}
+                                                        >
+                                                            {f.iconUrl
+                                                                ? <img src={f.iconUrl} alt="" className="w-4 h-4 object-contain" loading="lazy" />
+                                                                : f.name.slice(0, 2).toUpperCase()}
+                                                        </span>
+                                                    );
+                                                })}
+                                                {items.length > 4 && (
+                                                    <span className="w-6 h-6 rounded-md bg-surface-2 ring-2 ring-surface text-fg-muted text-[9px] font-bold flex items-center justify-center">
+                                                        +{items.length - 4}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Tìm kiếm + đếm ── */}
+                <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-fg-subtle" size={16} />
                         <input
                             type="text"
-                            placeholder="Tìm theo tên hoặc slug..."
+                            placeholder="Tìm framework theo tên hoặc slug…"
                             value={searchInput}
                             onChange={e => setSearchInput(e.target.value)}
-                            className="w-full pl-10 pr-3 py-2.5 bg-surface-2/60 border border-line rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:border-primary-400 focus:bg-surface focus:ring-4 focus:ring-primary-500/10 transition-all outline-none"
+                            aria-label="Tìm framework"
+                            className="w-full pl-11 pr-4 py-3 bg-surface border border-line rounded-full text-sm text-fg shadow-card placeholder:text-fg-subtle focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none"
                         />
                     </div>
-
-                    {frameworks.length > 0 && (
-                        <>
-                            {/* Thanh phân bố nhóm — khoảng hở 2px giữa các đoạn */}
-                            <div className="flex h-1.5 w-full gap-[2px] rounded-full overflow-hidden" role="img" aria-label="Phân bố framework theo nhóm">
-                                {CATEGORIES.filter(c => counts[c] > 0).map(c => (
-                                    <motion.div
-                                        key={c}
-                                        initial={{ flexGrow: 0 }}
-                                        animate={{ flexGrow: counts[c] }}
-                                        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                                        style={{ background: CATEGORY_COLOR[c], flexBasis: 0, opacity: category === 'all' || category === c ? 1 : 0.25 }}
-                                        className="h-full first:rounded-l-full last:rounded-r-full transition-opacity"
-                                    />
-                                ))}
-                                {counts.none > 0 && (
-                                    <motion.div initial={{ flexGrow: 0 }} animate={{ flexGrow: counts.none }} className="h-full bg-surface-3 last:rounded-r-full" style={{ flexBasis: 0, opacity: category === 'all' || category === 'none' ? 1 : 0.25 }} />
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                {chips.map(chip => {
-                                    const active = category === chip.id;
-                                    const color = chip.color ?? 'rgb(var(--fg-muted))';
-                                    return (
-                                        <button
-                                            key={chip.id}
-                                            onClick={() => { setCategory(chip.id); setPage(1); }}
-                                            className={cn(
-                                                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all',
-                                                active ? 'shadow-sm' : 'bg-surface text-fg-muted border-line hover:border-line hover:bg-surface-2',
-                                            )}
-                                            style={active ? { background: chip.color ?? 'rgb(var(--fg))', borderColor: chip.color ?? 'rgb(var(--fg))', color: chip.color ? onBrand(chip.color) : 'rgb(var(--surface))' } : undefined}
-                                        >
-                                            {chip.color && <span className="w-1.5 h-1.5 rounded-full" style={{ background: active ? 'currentColor' : color }} />}
-                                            {chip.label}
-                                            <span className={cn('tabular-nums', active ? 'opacity-80' : 'text-fg-subtle')}>{counts[chip.id]}</span>
-                                        </button>
-                                    );
-                                })}
-                                {searchQuery && (
-                                    <span className="ml-auto text-xs text-fg-muted"><span className="font-semibold text-fg">{filtered.length}</span> kết quả</span>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* ── Đếm ── */}
-                <div className="mb-4 text-sm text-fg-muted flex justify-between items-center">
-                    <div>
-                        Hiển thị <span className="font-semibold text-fg">{paginated.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</span> đến <span className="font-semibold text-fg">{Math.min(page * PAGE_SIZE, filtered.length)}</span> trong <span className="font-semibold text-fg">{filtered.length}</span> framework
+                    <div className="flex items-center justify-between sm:justify-end gap-3 text-sm text-fg-muted whitespace-nowrap">
+                        <span>
+                            Hiển thị <span className="font-semibold text-fg">{paginated.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</span>–<span className="font-semibold text-fg">{Math.min(page * PAGE_SIZE, filtered.length)}</span> / <span className="font-semibold text-fg">{filtered.length}</span>
+                            {category !== 'all' && <span className="text-fg-subtle"> · {groupLabel(category)}</span>}
+                        </span>
+                        {loading && (
+                            <span className="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-300 text-xs font-semibold animate-pulse">
+                                <span className="w-1.5 h-1.5 bg-current rounded-full" />
+                                Đang tải
+                            </span>
+                        )}
                     </div>
-                    {loading && (
-                        <div className="flex items-center gap-2 text-primary-600 text-xs font-semibold animate-pulse">
-                            <div className="w-1.5 h-1.5 bg-primary-600 rounded-full animate-bounce" />
-                            ĐANG CẬP NHẬT...
-                        </div>
-                    )}
                 </div>
 
                 {/* ── Danh sách / lưới ── */}
-                <div className={`transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+                <div className={`mt-5 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
                     {paginated.length > 0 ? (
                         <AnimatePresence mode="wait" initial={false}>
                             {view === 'grid' ? (
                                 <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-                                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {paginated.map(fw => (
-                                        <FrameworkCard key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
+                                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    {sections.map(s => (
+                                        <React.Fragment key={s.key}>
+                                            {showSectionHeaders && <SectionHeader k={s.key} count={s.items.length} className="col-span-full mt-2 first:mt-0" />}
+                                            {s.items.map(fw => (
+                                                <FrameworkCard key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
+                                            ))}
+                                        </React.Fragment>
                                     ))}
                                 </motion.div>
                             ) : (
                                 <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="space-y-3">
-                                    {paginated.map(fw => (
-                                        <FrameworkListItem key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
+                                    {sections.map(s => (
+                                        <React.Fragment key={s.key}>
+                                            {showSectionHeaders && <SectionHeader k={s.key} count={s.items.length} className="pt-2 first:pt-0" />}
+                                            {s.items.map(fw => (
+                                                <FrameworkListItem key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
+                                            ))}
+                                        </React.Fragment>
                                     ))}
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     ) : (
                         !loading && (
-                            <div className="text-center py-12 bg-surface border-2 border-dashed border-line rounded-3xl shadow-card">
-                                <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <div className="relative text-center py-14 bg-surface/70 border border-dashed border-line rounded-3xl">
+                                <Corner className="top-3 left-3 border-t-2 border-l-2 rounded-tl" />
+                                <Corner className="top-3 right-3 border-t-2 border-r-2 rounded-tr" />
+                                <Corner className="bottom-3 left-3 border-b-2 border-l-2 rounded-bl" />
+                                <Corner className="bottom-3 right-3 border-b-2 border-r-2 rounded-br" />
+                                <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-4 [background-image:radial-gradient(rgb(var(--fg-subtle)/0.35)_1px,transparent_1px)] [background-size:8px_8px]">
                                     <Layers className="w-8 h-8 text-fg-subtle" />
                                 </div>
                                 <h3 className="text-lg font-bold text-fg">Không tìm thấy framework nào</h3>
-                                <p className="text-fg-muted text-sm">Thử đổi từ khóa, bỏ lọc nhóm hoặc thêm mới</p>
+                                <p className="text-fg-muted text-sm">Thử đổi từ khóa, chọn nhóm khác hoặc thêm mới</p>
                             </div>
                         )
                     )}
@@ -312,12 +366,13 @@ const FrameworkManagement: React.FC = () => {
                         <div className="text-sm text-fg-muted">
                             Trang <span className="font-semibold text-fg">{page}</span> / <span className="font-semibold text-fg">{totalPages}</span>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setPage(p => p - 1)} disabled={page === 1 || loading} className="p-2 border border-line rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <ChevronLeft size={18} />
+                        <div className="inline-flex items-center rounded-full border border-line bg-surface p-1 shadow-card gap-1">
+                            <button onClick={() => setPage(p => p - 1)} disabled={page === 1 || loading} aria-label="Trang trước" className="w-8 h-8 rounded-full text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                <ChevronLeft size={17} />
                             </button>
-                            <button onClick={() => setPage(p => p + 1)} disabled={page === totalPages || loading} className="p-2 border border-line rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <ChevronRight size={18} />
+                            <span className="px-2 text-xs font-semibold tabular-nums text-fg">{page}</span>
+                            <button onClick={() => setPage(p => p + 1)} disabled={page === totalPages || loading} aria-label="Trang sau" className="w-8 h-8 rounded-full text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                <ChevronRight size={17} />
                             </button>
                         </div>
                     </div>

@@ -289,6 +289,12 @@ export const SOURCE_LABEL: Record<BrandSource, string> = {
 export const tint = (color: string, alphaPct: number) =>
     `color-mix(in srgb, ${color} ${alphaPct}%, transparent)`;
 
+/**
+ * Màu thương hiệu dùng làm CHỮ trên nền surface: trộn 30% với --fg nên vàng/cyan sáng
+ * đọc được ở light mode, còn màu tối (#111 của Next.js) không lẫn vào nền ở dark mode.
+ */
+export const brandText = (color: string) => `color-mix(in srgb, ${color} 70%, rgb(var(--fg)))`;
+
 /** Màu chữ để đọc được trên nền màu thương hiệu (logo vàng/cyan sáng → chữ tối). */
 export const onBrand = (color: string): string => {
     const m = /^#([0-9a-f]{6})$/i.exec(color.trim());

@@ -70,11 +70,14 @@ module.exports = {
       },
       backgroundImage: {
         'grid-pattern': "linear-gradient(to right, rgb(var(--color-primary-500) / 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgb(var(--color-primary-500) / 0.06) 1px, transparent 1px)",
+        // Nền chấm kiểu bản thiết kế (blueprint) — dùng cho trang Framework
+        'dot-pattern': "radial-gradient(rgb(var(--color-primary-500) / 0.16) 1px, transparent 1px)",
         'gradient-mesh': "radial-gradient(at 0% 0%, rgb(var(--color-primary-500) / 0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, rgb(var(--color-accent-500) / 0.15) 0px, transparent 50%)",
         'noise': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
       },
       backgroundSize: {
         'grid': '32px 32px',
+        'dot': '22px 22px',
       },
       boxShadow: {
         'glow-primary': '0 0 20px rgb(var(--color-primary-500) / 0.35)',
