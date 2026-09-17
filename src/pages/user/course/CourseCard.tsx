@@ -20,7 +20,8 @@ interface CourseCardProps {
     variant: 'free' | 'pro';
 }
 
-const THUMBNAIL_GRADIENTS = [
+/** Gradient thumbnail theo id — dùng chung với list view của CourseFinder. */
+export const THUMBNAIL_GRADIENTS = [
     'from-indigo-500 via-violet-500 to-purple-600',
     'from-violet-500 via-fuchsia-500 to-pink-500',
     'from-emerald-500 via-teal-500 to-cyan-600',

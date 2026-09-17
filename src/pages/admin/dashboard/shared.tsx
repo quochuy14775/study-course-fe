@@ -98,7 +98,11 @@ export const CardTitle: React.FC<CardTitleProps> = ({ title, description, action
     <div className={cn('flex items-start justify-between gap-3 px-5 pt-5', className)}>
         <div className="min-w-0">
             <h3 className="text-sm font-semibold text-fg leading-tight">{title}</h3>
-            {description && <p className="text-xs text-fg-muted mt-1">{description}</p>}
+            {description && (
+                <p className="font-mono text-[11px] text-fg-muted mt-1.5 leading-snug">
+                    <span className="text-fg-subtle select-none">{'// '}</span>{description}
+                </p>
+            )}
         </div>
         {action && <div className="flex-shrink-0">{action}</div>}
     </div>
@@ -262,14 +266,22 @@ export const ViewToggle: React.FC<{ view: 'chart' | 'table'; onChange: (v: 'char
     </div>
 );
 
-/** Tiêu đề nhóm card. */
+/** Tiêu đề nhóm card — eyebrow dạng tag `<Vận hành />` (cùng motif với logo), hint dạng comment. */
 export const SectionHeading: React.FC<{ eyebrow: string; title: string; hint?: string; right?: React.ReactNode }> = ({ eyebrow, title, hint, right }) => (
-    <motion.div variants={card} className="flex items-end justify-between gap-3 mb-3 mt-2">
-        <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary-600 dark:text-primary-300">{eyebrow}</p>
-            <h2 className="text-base font-bold text-fg leading-tight mt-0.5">{title}</h2>
-            {hint && <p className="text-xs text-fg-muted mt-0.5">{hint}</p>}
+    <motion.div variants={card} className="flex items-end gap-4 mb-3 mt-2">
+        <div className="min-w-0">
+            <p className="font-mono text-[11px] font-medium text-primary-600 dark:text-primary-300 whitespace-nowrap">
+                <span className="text-fg-subtle">{'<'}</span>{eyebrow}<span className="text-fg-subtle">{' />'}</span>
+            </p>
+            <h2 className="text-base font-bold text-fg leading-tight mt-1">{title}</h2>
+            {hint && (
+                <p className="font-mono text-[11px] text-fg-muted mt-1">
+                    <span className="text-fg-subtle select-none">{'// '}</span>{hint}
+                </p>
+            )}
         </div>
+        {/* Đường kẻ nối tới mép phải, kiểu divider trong code: // ── Vận hành ── */}
+        <div className="hidden sm:block flex-1 h-px mb-2 bg-gradient-to-r from-line to-transparent" aria-hidden />
         {right}
     </motion.div>
 );

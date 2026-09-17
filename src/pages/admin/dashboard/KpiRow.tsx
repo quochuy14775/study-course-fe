@@ -22,7 +22,9 @@ const KpiRow: React.FC = () => {
             {kpis.map((k) => (
                 <TiltCard key={k.id} className="p-4" onClick={k.to ? () => navigate(k.to!) : undefined}>
                     <div className="flex items-start justify-between gap-2">
-                        <p className="text-[11px] font-medium text-fg-muted truncate">{k.label}</p>
+                        <p className="font-mono text-[11px] text-fg-muted truncate">
+                            <span className="text-fg-subtle select-none">{'// '}</span>{k.label}
+                        </p>
                         {k.to && (
                             <ArrowUpRight className="w-3.5 h-3.5 text-fg-subtle opacity-0 -translate-y-0.5 translate-x-0.5 transition-all group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0" />
                         )}
@@ -33,13 +35,13 @@ const KpiRow: React.FC = () => {
                         suffix={k.suffix ? ` ${k.suffix}` : undefined}
                         format={k.format}
                         locales="vi-VN"
-                        className="block mt-1.5 text-[1.6rem] font-bold tracking-tight text-fg leading-none"
+                        className="block mt-2 text-[1.6rem] font-bold tracking-tight text-fg leading-none tabular-nums"
                     />
 
                     <div className="mt-2.5 flex items-end justify-between gap-2">
                         <div className="min-w-0">
                             <Delta pct={k.deltaPct} upIsGood={k.upIsGood} />
-                            <p className="text-[10px] text-fg-subtle mt-1 truncate">{k.note ?? `so với ${RANGE_LABEL[range]} trước`}</p>
+                            <p className="font-mono text-[10px] text-fg-subtle mt-1 truncate">{k.note ?? `so với ${RANGE_LABEL[range]} trước`}</p>
                         </div>
                         <Sparkline key={`${k.id}-${range}`} data={k.trend} className="flex-shrink-0 -mb-0.5" width={72} height={26} />
                     </div>

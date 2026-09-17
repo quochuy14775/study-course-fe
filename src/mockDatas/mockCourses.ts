@@ -115,21 +115,28 @@ export const premiumCourses: Course[] = [
     }),
 ];
 
-// Hero slides
+// Hero slides — mỗi slide là một "tab file" trong cửa sổ editor ở trang chủ.
+// `dot` là màu file-icon quen thuộc (React cyan, TS blue, Node green).
 export const slides = [
     {
+        file: "react.tsx",
+        dot: "#61dafb",
         eyebrow: "Lộ trình Frontend",
         title: "Học React từ số 0 đến",
         highlight: "đi làm",
         desc: "Component, hooks, state, routing — học qua dự án thật, có quiz và chứng chỉ sau mỗi khóa.",
     },
     {
+        file: "typescript.ts",
+        dot: "#3178c6",
         eyebrow: "Viết code an toàn hơn",
         title: "Làm chủ TypeScript trong",
         highlight: "2 tuần",
         desc: "Từ kiểu cơ bản đến generics và type-level programming, áp dụng ngay vào dự án của bạn.",
     },
     {
+        file: "fullstack.ts",
+        dot: "#5fa04e",
         eyebrow: "Fullstack Developer",
         title: "Frontend + Backend trong",
         highlight: "một hành trình",

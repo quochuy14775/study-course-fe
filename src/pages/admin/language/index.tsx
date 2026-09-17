@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Plus, ChevronLeft, ChevronRight, Code2, LayoutGrid, List as ListIcon } from 'lucide-react';
 import type { Language, LanguageRequest } from "../../../types/language";
 import languageService from "../../../services/languageService";
@@ -134,7 +134,7 @@ const LanguageManagement: React.FC = () => {
 
     const TOKEN_LIMIT = 10;
 
-    /* Nút chuyển lưới/danh sách + Thêm — dùng ở tab bar (sm+) và hàng riêng (mobile) */
+    /* Nút chuyển lưới/danh sách + Thêm — chỉ render MỘT lần (layoutId trùng sẽ làm framer ẩn pill) */
     const actions = (
         <>
             <div className="inline-flex items-center rounded-lg border border-line bg-surface p-0.5" role="tablist" aria-label="Kiểu hiển thị">
@@ -171,21 +171,21 @@ const LanguageManagement: React.FC = () => {
 
                 {/* ── Header: cửa sổ editor ── */}
                 <section className="rounded-2xl border border-line bg-surface shadow-card overflow-hidden animate-fade-in-up">
-                    {/* Tab bar */}
-                    <div className="flex items-stretch h-11 pl-3 sm:pl-4 pr-2 sm:pr-3 bg-surface-2/70 border-b border-line">
-                        <span className="hidden sm:flex items-center gap-1.5 mr-3" aria-hidden>
+                    {/* Tab bar — mobile: cụm nút rớt xuống hàng riêng (flex-wrap), vẫn chỉ một instance */}
+                    <div className="flex flex-wrap items-stretch pl-3 sm:pl-4 pr-2 sm:pr-3 bg-surface-2/70 border-b border-line">
+                        <span className="hidden sm:flex items-center gap-1.5 mr-3 h-11" aria-hidden>
                             <span className="w-3 h-3 rounded-full bg-rose-400/80" />
                             <span className="w-3 h-3 rounded-full bg-amber-400/80" />
                             <span className="w-3 h-3 rounded-full bg-emerald-400/80" />
                         </span>
-                        <div className="relative flex items-center gap-2 px-3 bg-surface border-x border-line font-mono text-xs text-fg">
+                        <div className="relative flex items-center gap-2 h-11 px-3 bg-surface border-x border-line font-mono text-xs text-fg">
                             <span className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary-500 to-accent-500" />
                             <Code2 size={13} className="text-primary-600 dark:text-primary-300" />
                             languages.ts
                             {loading && <span className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse" title="Đang tải" />}
                         </div>
-                        <span className="hidden md:flex items-center px-3 font-mono text-[11px] text-fg-subtle">~/management/languages</span>
-                        <div className="ml-auto hidden sm:flex items-center gap-2">{actions}</div>
+                        <span className="hidden md:flex items-center h-11 px-3 font-mono text-[11px] text-fg-subtle">~/management/languages</span>
+                        <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-end gap-2 py-2 sm:py-0 sm:h-11 border-t border-line/60 sm:border-0">{actions}</div>
                     </div>
 
                     {/* Thân file: gutter + các dòng */}
@@ -253,9 +253,6 @@ const LanguageManagement: React.FC = () => {
                     </div>
                 </section>
 
-                {/* Hành động cho mobile */}
-                <div className="sm:hidden flex items-center justify-end gap-2 mt-3">{actions}</div>
-
                 {/* ── Tabs lọc + tìm kiếm ── */}
                 <div className="mt-6 flex flex-col md:flex-row md:items-end gap-3 border-b border-line">
                     <div role="tablist" aria-label="Lọc ngôn ngữ" className="flex items-center gap-1 -mb-px overflow-x-auto">
@@ -316,16 +313,17 @@ const LanguageManagement: React.FC = () => {
                 {/* ── Danh sách / lưới ── */}
                 <div className={`transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
                     {paginated.length > 0 ? (
-                        <AnimatePresence mode="wait" initial={false}>
+                        /* Không dùng AnimatePresence mode="wait" (React 19 có thể kẹt exit → không mount view mới) */
+                        <>
                             {view === 'grid' ? (
-                                <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                <motion.div key="grid" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
                                     className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {paginated.map(lang => (
                                         <LanguageCard key={lang.id} language={lang} onEdit={(l) => setModal({ open: true, language: l })} onDelete={handleDelete} />
                                     ))}
                                 </motion.div>
                             ) : (
-                                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                <motion.div key="list" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
                                     className="rounded-xl border border-line bg-surface shadow-card overflow-hidden">
                                     {/* Hàng tiêu đề kiểu chú thích */}
                                     <div className={cn('hidden md:grid items-center gap-x-3 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-fg-subtle bg-surface-2/60 border-b border-line', LANGUAGE_ROW_COLS)}>
@@ -349,7 +347,7 @@ const LanguageManagement: React.FC = () => {
                                     </div>
                                 </motion.div>
                             )}
-                        </AnimatePresence>
+                        </>
                     ) : (
                         !loading && (
                             <div className="rounded-xl border-2 border-dashed border-line bg-surface shadow-card px-6 py-10 font-mono text-sm">

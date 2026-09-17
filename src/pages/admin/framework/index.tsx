@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Plus, Search, ChevronLeft, ChevronRight, Layers, LayoutGrid, List as ListIcon, Check } from 'lucide-react';
 import type { Framework, FrameworkRequest } from "../../../types/framework";
 import frameworkService from "../../../services/frameworkService";
@@ -32,6 +32,19 @@ const groupLabel = (k: CategoryFilter): string =>
 const Corner: React.FC<{ className: string }> = ({ className }) => (
     <span className={cn('absolute w-4 h-4 border-line-2', className)} aria-hidden />
 );
+
+/** Tiêu đề section theo nhóm — khai báo ngoài component để không bị remount mỗi lần render */
+const SectionHeader: React.FC<{ k: GroupKey; count: number; className?: string }> = ({ k, count, className }) => {
+    const color = groupColor(k);
+    return (
+        <div className={cn('flex items-center gap-3', className)}>
+            <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color }}>{groupLabel(k)}</span>
+            <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
+            <span className="flex-1 h-px" style={{ background: `linear-gradient(to right, ${tint(color, 45)}, transparent)` }} />
+        </div>
+    );
+};
 
 const FrameworkManagement: React.FC = () => {
     const [frameworks, setFrameworks] = useState<Framework[]>([]);
@@ -95,12 +108,12 @@ const FrameworkManagement: React.FC = () => {
         const q = searchQuery.toLowerCase();
         return frameworks
             .filter(f => {
-                if (q && !(f.name.toLowerCase().includes(q) || f.slug.toLowerCase().includes(q))) return false;
+                if (q && !((f.name ?? '').toLowerCase().includes(q) || (f.slug ?? '').toLowerCase().includes(q))) return false;
                 return category === 'all' || groupOf(f) === category;
             })
             .sort((a, b) => {
                 const d = GROUP_ORDER.indexOf(groupOf(a)) - GROUP_ORDER.indexOf(groupOf(b));
-                return d !== 0 ? d : a.name.localeCompare(b.name, 'vi');
+                return d !== 0 ? d : (a.name ?? '').localeCompare(b.name ?? '', 'vi');
             });
     }, [frameworks, searchQuery, category, groupOf]);
 
@@ -148,18 +161,6 @@ const FrameworkManagement: React.FC = () => {
     };
 
     const tiles: CategoryFilter[] = ['all', ...activeGroups];
-
-    const SectionHeader: React.FC<{ k: GroupKey; count: number; className?: string }> = ({ k, count, className }) => {
-        const color = groupColor(k);
-        return (
-            <div className={cn('flex items-center gap-3', className)}>
-                <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color }}>{groupLabel(k)}</span>
-                <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
-                <span className="flex-1 h-px" style={{ background: `linear-gradient(to right, ${tint(color, 45)}, transparent)` }} />
-            </div>
-        );
-    };
 
     return (
         <main className="min-h-screen relative">
@@ -317,32 +318,27 @@ const FrameworkManagement: React.FC = () => {
                 {/* ── Danh sách / lưới ── */}
                 <div className={`mt-5 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
                     {paginated.length > 0 ? (
-                        <AnimatePresence mode="wait" initial={false}>
-                            {view === 'grid' ? (
-                                <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-                                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    {sections.map(s => (
-                                        <React.Fragment key={s.key}>
-                                            {showSectionHeaders && <SectionHeader k={s.key} count={s.items.length} className="col-span-full mt-2 first:mt-0" />}
-                                            {s.items.map(fw => (
-                                                <FrameworkCard key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
-                                            ))}
-                                        </React.Fragment>
-                                    ))}
-                                </motion.div>
-                            ) : (
-                                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="space-y-3">
-                                    {sections.map(s => (
-                                        <React.Fragment key={s.key}>
-                                            {showSectionHeaders && <SectionHeader k={s.key} count={s.items.length} className="pt-2 first:pt-0" />}
-                                            {s.items.map(fw => (
-                                                <FrameworkListItem key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
-                                            ))}
-                                        </React.Fragment>
-                                    ))}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        /* Không dùng AnimatePresence mode="wait": với React 19 nó có thể kẹt ở exit và không mount view mới.
+                           Đổi key theo view → view mới fade-in, view cũ gỡ ngay. */
+                        <motion.div
+                            key={view}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.18 }}
+                            className={view === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4' : 'space-y-3'}
+                        >
+                            {sections.map(s => (
+                                <React.Fragment key={s.key}>
+                                    {showSectionHeaders && (
+                                        <SectionHeader k={s.key} count={s.items.length} className={view === 'grid' ? 'col-span-full mt-2 first:mt-0' : 'pt-2 first:pt-0'} />
+                                    )}
+                                    {s.items.map(fw => view === 'grid'
+                                        ? <FrameworkCard key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
+                                        : <FrameworkListItem key={fw.id} framework={fw} onEdit={(f) => setModal({ open: true, framework: f })} onDelete={handleDelete} />
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </motion.div>
                     ) : (
                         !loading && (
                             <div className="relative text-center py-14 bg-surface/70 border border-dashed border-line rounded-3xl">

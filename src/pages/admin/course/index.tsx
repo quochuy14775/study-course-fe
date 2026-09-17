@@ -1,156 +1,240 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, ChevronLeft, ChevronRight, ChevronDown, Check, X, RotateCcw, Code2, Terminal, Star, Lock, Gift, Tag, BookOpen, ArrowUpDown } from 'lucide-react';
 import { showToast } from "../../../components/CustomToast";
-import {
-    Plus, Search, ChevronLeft, ChevronRight,
-    List, Gift, DollarSign, Leaf, TrendingUp, Flame
-} from 'lucide-react';
 import { CourseRequest, CourseUI, mapCourseToUI } from "../../../types/course";
 import AddCourseDialog from "./AddCourseDialog";
 import EditCourseDialog from "./EditCourseDialog";
 import DeleteCourseDialog from "./DeleteCourseDialog";
-import CustomDropdown from "../../../components/CustomDropdown";
 import courseService from "../../../services/courseServices";
-import {ITEMS_PER_PAGE} from "../../../types/odata";
+import { ITEMS_PER_PAGE } from "../../../types/odata";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from '../../../components/ui/DropdownMenu';
+import { resolveLanguageBrand, resolveFrameworkBrand } from '../../../lib/techBrand';
+import { cn } from '../../../lib/cn';
 import CourseListItem from './CourseListItem';
-import { useNavigate } from 'react-router-dom';
+import { LEVELS, LevelMeter } from './levelMeta';
+
+/* ─────────────────────────────────────────────────────────────
+   Truy vấn
+   ───────────────────────────────────────────────────────────── */
+
+type TypeFilter = '' | 'free' | 'paid' | 'featured' | 'inactive';
+type SortKey = 'newest' | 'oldest' | 'name' | 'price_asc' | 'price_desc';
+interface Query { search: string; level: string; type: TypeFilter; sort: SortKey; page: number }
+
+const DEFAULT_QUERY: Query = { search: '', level: '', type: '', sort: 'newest', page: 1 };
+
+const SORTS: Record<SortKey, { label: string; orderby: string }> = {
+    newest:     { label: 'Mới nhất',        orderby: 'CreatedAt desc' },
+    oldest:     { label: 'Cũ nhất',         orderby: 'CreatedAt asc' },
+    name:       { label: 'Tên A → Z',       orderby: 'Title asc' },
+    price_asc:  { label: 'Giá thấp → cao', orderby: 'Price asc' },
+    price_desc: { label: 'Giá cao → thấp', orderby: 'Price desc' },
+};
+
+const TYPE_LABEL: Record<TypeFilter, string> = { '': 'Tất cả', free: 'Miễn phí', paid: 'Trả phí', featured: 'Nổi bật', inactive: 'Đang ẩn' };
+
+/* ─────────────────────────────────────────────────────────────
+   Mảnh UI
+   ───────────────────────────────────────────────────────────── */
+
+interface Option { value: string; label: string; icon?: React.ReactNode }
+
+/** Nút lọc dạng "Type ▾" kiểu GitHub — nhãn mờ + giá trị đang chọn */
+const FilterMenu: React.FC<{ label: string; value: string; options: Option[]; onChange: (v: string) => void; align?: 'start' | 'end' }> = ({ label, value, options, onChange, align = 'start' }) => {
+    const current = options.find(o => o.value === value);
+    const active = value !== '' && value !== 'newest';
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button className={cn(
+                    'inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-semibold whitespace-nowrap transition-colors',
+                    active
+                        ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300'
+                        : 'border-line bg-surface text-fg-2 hover:bg-surface-2',
+                )}>
+                    <span className={active ? 'opacity-70' : 'text-fg-subtle'}>{label}:</span>
+                    {current?.label}
+                    <ChevronDown size={12} className="opacity-60" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={align} className="min-w-[11rem]">
+                <DropdownMenuLabel>{label}</DropdownMenuLabel>
+                {options.map(o => (
+                    <DropdownMenuItem key={o.value} onSelect={() => onChange(o.value)} className="py-2 text-xs">
+                        <span className="w-4 flex justify-center text-fg-muted">{o.icon}</span>
+                        <span className="flex-1">{o.label}</span>
+                        {o.value === value && <Check size={13} className="text-primary-600 dark:text-primary-300" />}
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+};
+
+/** Thanh ngôn ngữ kiểu GitHub: tỉ lệ công nghệ xuất hiện trong các khóa học đang hiển thị */
+const StackBar: React.FC<{ courses: CourseUI[] }> = ({ courses }) => {
+    const stack = useMemo(() => {
+        const m = new Map<string, { name: string; color: string; n: number }>();
+        courses.forEach(c => {
+            (c.languages ?? []).forEach(l => { const k = `l${l.id}`; const e = m.get(k); if (e) e.n++; else m.set(k, { name: l.name, color: resolveLanguageBrand(l).color, n: 1 }); });
+            (c.frameworks ?? []).forEach(f => { const k = `f${f.id}`; const e = m.get(k); if (e) e.n++; else m.set(k, { name: f.name, color: resolveFrameworkBrand(f).color, n: 1 }); });
+        });
+        const arr = Array.from(m.values()).sort((a, b) => b.n - a.n);
+        const total = arr.reduce((s, x) => s + x.n, 0);
+        return { arr, total };
+    }, [courses]);
+
+    if (stack.total === 0) return null;
+    const shown = stack.arr.slice(0, 6);
+    const rest = stack.arr.length - shown.length;
+
+    return (
+        <div className="mt-5">
+            <div className="flex h-2 w-full rounded-full overflow-hidden bg-surface-3 gap-px" role="img" aria-label="Tỉ lệ công nghệ của các khóa học đang hiển thị">
+                {stack.arr.map((t, i) => (
+                    <motion.span
+                        key={t.name + i}
+                        initial={{ flexGrow: 0 }}
+                        animate={{ flexGrow: t.n }}
+                        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                        style={{ background: t.color, flexBasis: 0 }}
+                        title={`${t.name} · ${Math.round((t.n / stack.total) * 100)}%`}
+                    />
+                ))}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
+                {shown.map((t, i) => (
+                    <span key={t.name + i} className="inline-flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style={{ background: t.color }} />
+                        <span className="font-medium text-fg-2">{t.name}</span>
+                        <span className="font-mono tabular-nums">{Math.round((t.n / stack.total) * 100)}%</span>
+                    </span>
+                ))}
+                {rest > 0 && <span className="text-fg-subtle">+{rest} khác</span>}
+            </div>
+        </div>
+    );
+};
+
+/** Danh sách số trang có dấu … */
+const pageItems = (page: number, total: number): Array<number | '…'> => {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const s = new Set<number>([1, total, page - 1, page, page + 1].filter(p => p >= 1 && p <= total));
+    const arr = Array.from(s).sort((a, b) => a - b);
+    const out: Array<number | '…'> = [];
+    arr.forEach((p, i) => { if (i > 0 && p - arr[i - 1] > 1) out.push('…'); out.push(p); });
+    return out;
+};
+
+const RowSkeleton: React.FC = () => (
+    <li className="flex gap-4 px-5 py-4">
+        <span className="shimmer w-12 h-12 rounded-lg flex-shrink-0" />
+        <div className="flex-1 space-y-2.5 py-0.5">
+            <span className="shimmer block h-4 w-1/3 rounded" />
+            <span className="shimmer block h-3 w-3/4 rounded" />
+            <div className="flex gap-2 pt-1"><span className="shimmer h-6 w-20 rounded-full" /><span className="shimmer h-6 w-16 rounded-full" /></div>
+        </div>
+    </li>
+);
+
+/* ─────────────────────────────────────────────────────────────
+   Trang
+   ───────────────────────────────────────────────────────────── */
 
 const CourseManagement: React.FC = () => {
-    const [courses, setCourses]         = useState<CourseUI[]>([]);
-    const [totalCount, setTotalCount]   = useState(0);
-    const [loading, setLoading]         = useState(true);
-    const [error, setError]             = useState<string | null>(null);
+    const [courses, setCourses]       = useState<CourseUI[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [loading, setLoading]       = useState(true);
+    const [error, setError]           = useState<string | null>(null);
+    const [refreshNonce, setRefreshNonce] = useState(0);
 
     const [showAddCourseModal, setShowAddCourseModal] = useState(false);
     const [editingCourse, setEditingCourse]           = useState<CourseUI | null>(null);
     const [deletingCourse, setDeletingCourse]         = useState<CourseUI | null>(null);
 
-    // UI-only state (does NOT directly trigger fetch)
-    const [searchInput, setSearchInput] = useState(''); // immediate input value for debounce
-
-    // Query state (single source of truth for API fetches)
-    const [query, setQuery] = useState({ search: '', level: '', price: '', page: 1 });
-
+    const [searchInput, setSearchInput] = useState('');
+    const [query, setQuery] = useState<Query>(DEFAULT_QUERY);
     const navigate = useNavigate();
 
-    /* ── Build OData filter string from query ── */
-    const buildFilter = (search: string, level: string, price: string): string | undefined => {
+    /* ── OData filter ── */
+    const buildFilter = (q: Query): string | undefined => {
         const clauses: string[] = [];
-
-        if (search.trim()) {
-            // OData 'contains' for title and description
-            clauses.push(
-                `(contains(tolower(Title),'${search.toLowerCase()}') or contains(tolower(Description),'${search.toLowerCase()}'))`
-            );
+        if (q.search.trim()) {
+            const s = q.search.toLowerCase().replace(/'/g, "''");
+            clauses.push(`(contains(tolower(Title),'${s}') or contains(tolower(Description),'${s}'))`);
         }
-        if (level) {
-            clauses.push(`Level eq '${level}'`);
-        }
-        if (price === 'free') {
-            clauses.push(`Price eq 0`);
-        } else if (price === 'paid') {
-            clauses.push(`Price gt 0`);
-        }
-
-        return clauses.length > 0 ? clauses.join(' and ') : undefined;
+        if (q.level) clauses.push(`Level eq '${q.level}'`);
+        if (q.type === 'free') clauses.push(`Price eq 0`);
+        else if (q.type === 'paid') clauses.push(`Price gt 0`);
+        else if (q.type === 'featured') clauses.push(`IsFeatured eq true`);
+        else if (q.type === 'inactive') clauses.push(`IsActive eq false`);
+        return clauses.length ? clauses.join(' and ') : undefined;
     };
 
-    /* ── Single effect for data fetching based on query ── */
+    /* ── Tải dữ liệu ── */
     useEffect(() => {
         let mounted = true;
-        const fetch = async () => {
+        (async () => {
             try {
                 setLoading(true);
                 setError(null);
-
-                const filter = buildFilter(query.search, query.level, query.price);
-
+                const filter = buildFilter(query);
                 const data = await courseService.getCourses({
-                    count:   true,
-                    top:     ITEMS_PER_PAGE,
-                    skip:    (query.page - 1) * ITEMS_PER_PAGE,
-                    orderby: 'CreatedAt desc',
+                    count: true,
+                    top: ITEMS_PER_PAGE,
+                    skip: (query.page - 1) * ITEMS_PER_PAGE,
+                    orderby: SORTS[query.sort].orderby,
                     ...(filter && { filter }),
                 });
-
                 if (!mounted) return;
-
                 setCourses((data.value || []).map(mapCourseToUI));
                 setTotalCount(data.count ?? 0);
             } catch (err) {
                 console.error('Failed to fetch courses:', err);
                 if (!mounted) return;
-                setError('Failed to load courses. Please try again.');
+                setError('Không tải được danh sách khóa học.');
             } finally {
                 if (mounted) setLoading(false);
             }
-        };
-
-        fetch();
-
+        })();
         return () => { mounted = false; };
-    }, [query.search, query.level, query.price, query.page]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [query.search, query.level, query.type, query.sort, query.page, refreshNonce]);
 
-    /* ── Derived pagination ── */
-    const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
-
-    /* ── Debounce searchInput -> update query.search (and reset to page 1) ── */
+    /* ── Debounce tìm kiếm ── */
     useEffect(() => {
         const id = setTimeout(() => {
             setQuery(prev => {
-                const trimmedSearch = searchInput.trim();
-                if (prev.search === trimmedSearch) return prev;
-                return { ...prev, search: trimmedSearch, page: 1 };
+                const s = searchInput.trim();
+                return prev.search === s ? prev : { ...prev, search: s, page: 1 };
             });
         }, 500);
-
         return () => clearTimeout(id);
     }, [searchInput]);
 
-    /* ── Filter handlers: update query state only ── */
-    const handleFilterChange = (type: 'level' | 'price', value: string) => {
-        setQuery(prev => {
-            if (type === 'level') {
-                if (prev.level === value) return prev;
-                return { ...prev, level: value, page: 1 };
-            } else {
-                if (prev.price === value) return prev;
-                return { ...prev, price: value, page: 1 };
-            }
-        });
-    };
-    const handleResetFilters = () => {
-        setSearchInput('');
-        setQuery({ search: '', level: '', price: '', page: 1 });
-    };
+    const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+    const hasFilter = !!(query.search || query.level || query.type);
+    const patch = (p: Partial<Query>) => setQuery(prev => ({ ...prev, ...p, page: 1 }));
+    const resetFilters = () => { setSearchInput(''); setQuery(q => ({ ...DEFAULT_QUERY, sort: q.sort })); };
+    const refresh = () => setRefreshNonce(n => n + 1);
 
-    /* ── Course handlers (optimistic updates where possible) ── */
+    /* ── CRUD (giữ hành vi cũ) ── */
     const handleAddCourse = async (data: CourseRequest) => {
         try {
             const response = await courseService.createCourse(data);
             const newCourse: CourseUI = mapCourseToUI(response);
-
-            // Optimistically insert into current page (at top)
-            setCourses(prev => {
-                const next = [newCourse, ...prev];
-                if (next.length > ITEMS_PER_PAGE) next.pop();
-                return next;
-            });
-
+            setCourses(prev => { const next = [newCourse, ...prev]; if (next.length > ITEMS_PER_PAGE) next.pop(); return next; });
             setTotalCount(prev => prev + 1);
             showToast.success("Tạo khóa học thành công! Hãy thêm bài học ngay.");
             setShowAddCourseModal(false);
-            // Auto-redirect to curriculum builder so admin doesn't forget to add lessons
             const newId = response?.id ?? newCourse.id;
-            if (newId) {
-                navigate(`/management/courses/${newId}/lessons`, { state: { courseTitle: newCourse.title } });
-            }
+            if (newId) navigate(`/management/courses/${newId}/lessons`, { state: { courseTitle: newCourse.title } });
             return response;
         } catch (err: any) {
             console.error("Create failed", err);
-            // If validation error (400), rethrow so dialog can display field errors
-            if (err?.response?.status === 400) {
-                throw err;
-            }
+            if (err?.response?.status === 400) throw err;
             showToast.error(err.response?.data?.message || 'Create failed');
             throw err;
         }
@@ -159,16 +243,13 @@ const CourseManagement: React.FC = () => {
     const handleDeleteCourse = async (id: number) => {
         const originalCourses = [...courses];
         const originalTotal = totalCount;
-
         setCourses(prev => {
             const remaining = prev.filter(c => c.id !== id);
-            if (remaining.length === 0 && query.page > 1)
-                setQuery(q => ({ ...q, page: q.page - 1 }));
+            if (remaining.length === 0 && query.page > 1) setQuery(q => ({ ...q, page: q.page - 1 }));
             return remaining;
         });
         setTotalCount(prev => Math.max(0, prev - 1));
         setDeletingCourse(null);
-
         try {
             await courseService.deleteCourses([String(id)]);
             showToast.success("Xóa khóa học thành công");
@@ -194,186 +275,171 @@ const CourseManagement: React.FC = () => {
         }
     };
 
-    /* ── Pagination controls update query.page ── */
-    const goToPrevPage = () => setQuery(prev => ({ ...prev, page: Math.max(prev.page - 1, 1) }));
-    const goToNextPage = () => setQuery(prev => ({ ...prev, page: Math.min(prev.page + 1, totalPages) }));
+    const openLessons = (id: number, title?: string) => navigate(`/management/courses/${id}/lessons`, { state: { courseTitle: title } });
 
-    const openLessons = (id: number, title?: string) => {
-        // Navigate to lesson page under management, pass course title via location state
-        navigate(`/management/courses/${id}/lessons`, { state: { courseTitle: title } });
-    };
+    /* ── Tuỳ chọn lọc ── */
+    const typeOptions: Option[] = [
+        { value: '', label: 'Tất cả', icon: <BookOpen size={12} /> },
+        { value: 'free', label: 'Miễn phí', icon: <Gift size={12} className="text-emerald-500" /> },
+        { value: 'paid', label: 'Trả phí', icon: <Tag size={12} className="text-amber-500" /> },
+        { value: 'featured', label: 'Nổi bật', icon: <Star size={12} className="text-amber-500" fill="currentColor" /> },
+        { value: 'inactive', label: 'Đang ẩn', icon: <Lock size={12} /> },
+    ];
+    const levelOptions: Option[] = [{ value: '', label: 'Tất cả' }, ...LEVELS.map(l => ({ value: l, label: l, icon: <LevelMeter level={l} /> }))];
+    const sortOptions: Option[] = (Object.keys(SORTS) as SortKey[]).map(k => ({ value: k, label: SORTS[k].label }));
+
+    const firstLoad = loading && courses.length === 0 && !error;
+    const from = courses.length > 0 ? (query.page - 1) * ITEMS_PER_PAGE + 1 : 0;
+    const to = Math.min(query.page * ITEMS_PER_PAGE, totalCount);
 
     return (
-        <main className="min-h-screen bg-ink-50 relative">
-            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
-            <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
+        <main className="min-h-screen relative">
+            <div className="relative max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
 
-                {/* HEADER */}
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6 sm:mb-8 animate-fade-in-up">
-                    <section>
-                        <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
-                            <span className="text-ink-400">~/</span>
-                            <span>management</span>
-                            <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
+                {/* ── Header kiểu trang repo ── */}
+                <div className="animate-fade-in-up">
+                    <div className="flex items-center gap-1.5 font-mono text-xs text-fg-muted">
+                        <Code2 size={13} className="text-primary-600 dark:text-primary-300" />
+                        <span>eduhub</span>
+                        <span className="text-fg-subtle">/</span>
+                        <span className="font-semibold text-fg">courses</span>
+                        <span className="ml-1.5 inline-flex items-center h-5 px-1.5 rounded-full border border-line text-[10px] font-semibold text-fg-muted tabular-nums">
+                            {loading && courses.length === 0 ? '…' : totalCount}
+                        </span>
+                    </div>
+                    <div className="mt-2 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                        <div className="min-w-0">
+                            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-fg">Quản lý khóa học</h1>
+                            <p className="mt-1.5 text-sm text-fg-muted max-w-xl">
+                                Mỗi khóa học là một repo: giáo trình là các commit, chương là branch, stack là công nghệ đi kèm.
+                            </p>
                         </div>
-                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink-900">Quản lý khóa học</h1>
-                    </section>
-                    <button
-                        onClick={() => setShowAddCourseModal(true)}
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-primary-600 to-accent-600 text-white font-semibold rounded-xl shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all"
-                    >
-                        <Plus size={18} /> Thêm khóa học
-                    </button>
+                    </div>
+
+                    {/* Language bar tổng hợp của trang */}
+                    {!error && <StackBar courses={courses} />}
                 </div>
 
-                {/* FILTERS */}
-                <div className="mb-6 p-3 sm:p-4 bg-white border border-ink-200 rounded-2xl shadow-soft">
-                    <div className="flex flex-wrap items-end gap-3 sm:gap-4">
-                        <div className="flex-1 min-w-[140px] sm:max-w-[200px] relative">
-                            <label className="block text-sm font-semibold text-ink-700 mb-2">Tìm kiếm</label>
-                            <Search className="absolute left-3 top-[38px] text-ink-400" size={16} />
-                            <input
-                                type="text"
-                                placeholder="Tìm theo tên, mô tả..."
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                className="w-full pl-10 pr-3 py-2 bg-white border border-ink-200 rounded-lg text-ink-900 placeholder:text-ink-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-300/30 transition-all"
-                            />
-                        </div>
-
-                        <div className="w-full sm:w-44">
-                            <CustomDropdown
-                                label="Cấp độ"
-                                value={query.level}
-                                onChange={(val) => handleFilterChange('level', val)}
-                                options={[
-                                    { value: '', label: 'Tất cả', icon: List },
-                                    { value: 'Beginner', label: 'Beginner', icon: Leaf, iconClass: 'text-green-500' },
-                                    { value: 'Intermediate', label: 'Intermediate', icon: TrendingUp, iconClass: 'text-yellow-500' },
-                                    { value: 'Advanced', label: 'Advanced', icon: Flame, iconClass: 'text-red-500' },
-                                ]}
-                            />
-                        </div>
-
-                        <div className="w-full sm:w-44">
-                            <CustomDropdown
-                                label="Giá"
-                                value={query.price}
-                                onChange={(val) => handleFilterChange('price', val)}
-                                options={[
-                                    { value: '', label: 'Tất cả', icon: List },
-                                    { value: 'free', label: 'Free', icon: Gift, iconClass: 'text-green-500' },
-                                    { value: 'paid', label: 'Paid', icon: DollarSign, iconClass: 'text-amber-500' },
-                                ]}
-                            />
-                        </div>
-
+                {/* ── Thanh lọc kiểu Repositories ── */}
+                <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div className="relative flex-1 min-w-0">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle" size={14} />
+                        <input
+                            type="text"
+                            placeholder="Tìm khóa học…"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            aria-label="Tìm khóa học"
+                            className="w-full h-9 pl-9 pr-3 bg-surface border border-line rounded-lg text-sm text-fg placeholder:text-fg-subtle focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none"
+                        />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <FilterMenu label="Loại" value={query.type} options={typeOptions} onChange={(v) => patch({ type: v as TypeFilter })} />
+                        <FilterMenu label="Cấp độ" value={query.level} options={levelOptions} onChange={(v) => patch({ level: v })} />
+                        <FilterMenu label="Sắp xếp" value={query.sort} options={sortOptions} onChange={(v) => patch({ sort: v as SortKey })} align="end" />
                         <button
-                            onClick={handleResetFilters}
-                            className="px-4 py-2 text-sm font-semibold text-ink-700 bg-ink-100 border border-ink-200 rounded-lg hover:bg-ink-200 transition-colors"
+                            onClick={() => setShowAddCourseModal(true)}
+                            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all whitespace-nowrap"
                         >
-                            Reset
+                            <Plus size={14} /> Thêm khóa học
                         </button>
-
-                        {(query.search || query.level || query.price) && (
-                            <div className="ml-auto text-sm text-ink-600">
-                                <span className="font-semibold">{totalCount}</span> kết quả
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                {error ? (
-                    <div className="p-12 text-center bg-white border-2 border-dashed border-ink-300 rounded-3xl shadow-soft">
-                        <p className="text-rose-600 text-lg font-medium">{error}</p>
-                        <button
-                            onClick={() => setQuery({...query})}
-                            className="mt-4 text-sm text-primary-600 hover:text-primary-700 font-semibold transition-colors"
-                        >
-                            Thử lại
+                {/* ── Kết quả + filter đang áp ── */}
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-fg-muted min-h-[1.75rem]">
+                    <span>
+                        <span className="font-semibold text-fg tabular-nums">{totalCount}</span> khóa học
+                        {query.search && <> khớp <span className="font-mono text-fg">"{query.search}"</span></>}
+                    </span>
+                    {(query.level || query.type) && <span className="text-fg-subtle">·</span>}
+                    {query.type && (
+                        <button onClick={() => patch({ type: '' })} className="inline-flex items-center gap-1 h-6 pl-2 pr-1.5 rounded-full bg-surface-2 border border-line text-xs font-medium text-fg-2 hover:border-fg-subtle transition-colors">
+                            {TYPE_LABEL[query.type]} <X size={11} />
                         </button>
+                    )}
+                    {query.level && (
+                        <button onClick={() => patch({ level: '' })} className="inline-flex items-center gap-1 h-6 pl-2 pr-1.5 rounded-full bg-surface-2 border border-line text-xs font-medium text-fg-2 hover:border-fg-subtle transition-colors">
+                            {query.level} <X size={11} />
+                        </button>
+                    )}
+                    {hasFilter && (
+                        <button onClick={resetFilters} className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 dark:text-primary-300 hover:underline">
+                            <RotateCcw size={11} /> Xóa lọc
+                        </button>
+                    )}
+                    <span className="ml-auto inline-flex items-center gap-1.5 text-xs">
+                        <ArrowUpDown size={11} /> {SORTS[query.sort].label}
+                        {loading && courses.length > 0 && <span className="ml-2 inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-300 font-semibold animate-pulse"><span className="w-1.5 h-1.5 rounded-full bg-current" /> đang tải</span>}
+                    </span>
+                </div>
+
+                {/* ── Box danh sách ── */}
+                <div className={cn('mt-3 rounded-xl border border-line bg-surface shadow-card overflow-hidden transition-opacity duration-200', loading && courses.length > 0 && 'opacity-60 pointer-events-none')}>
+                    {error ? (
+                        <div className="py-14 text-center">
+                            <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>
+                            <button onClick={refresh} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 dark:text-primary-300 hover:underline"><RotateCcw size={13} /> Thử lại</button>
+                        </div>
+                    ) : firstLoad ? (
+                        <ul className="divide-y divide-line">{Array.from({ length: 5 }).map((_, i) => <RowSkeleton key={i} />)}</ul>
+                    ) : courses.length === 0 ? (
+                        <div className="py-14 px-6 text-center">
+                            <Terminal className="w-9 h-9 text-fg-subtle mx-auto mb-3" />
+                            <p className="font-semibold text-fg">{hasFilter ? 'Không có khóa học khớp bộ lọc' : 'Chưa có khóa học nào'}</p>
+                            <p className="mt-1 font-mono text-xs text-fg-subtle">
+                                <span className="text-primary-600 dark:text-primary-300">$</span> {hasFilter ? 'eduhub courses list --reset' : 'eduhub courses init'}
+                            </p>
+                            {hasFilter
+                                ? <button onClick={resetFilters} className="mt-4 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg border border-line bg-surface text-sm font-semibold text-fg hover:bg-surface-2 transition-colors"><RotateCcw size={13} /> Xóa lọc</button>
+                                : <button onClick={() => setShowAddCourseModal(true)} className="mt-4 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors"><Plus size={14} /> Thêm khóa học</button>}
+                        </div>
+                    ) : (
+                        <ul className="divide-y divide-line">
+                            {courses.map(course => (
+                                <CourseListItem
+                                    key={course.id}
+                                    course={course}
+                                    onClick={() => openLessons(course.id, course.title)}
+                                    onDelete={(id) => setDeletingCourse(courses.find(c => c.id === id) ?? null)}
+                                    onEdit={setEditingCourse}
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </div>
+
+                {/* ── Phân trang ── */}
+                {!error && !firstLoad && totalCount > ITEMS_PER_PAGE && (
+                    <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-fg-muted">
+                        <span className="font-mono tabular-nums">{from}–{to} / {totalCount}</span>
+                        <nav className="inline-flex items-center gap-1" aria-label="Phân trang">
+                            <button onClick={() => setQuery(q => ({ ...q, page: Math.max(1, q.page - 1) }))} disabled={query.page === 1 || loading}
+                                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-fg-muted hover:bg-surface hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                <ChevronLeft size={14} /> Trước
+                            </button>
+                            {pageItems(query.page, totalPages).map((p, i) => p === '…'
+                                ? <span key={`e${i}`} className="w-8 text-center text-fg-subtle">…</span>
+                                : (
+                                    <button key={p} onClick={() => setQuery(q => ({ ...q, page: p }))} disabled={loading} aria-current={p === query.page ? 'page' : undefined}
+                                        className={cn('min-w-8 h-8 px-2 rounded-lg font-mono tabular-nums transition-colors', p === query.page ? 'bg-primary-600 text-white font-semibold' : 'text-fg-muted hover:bg-surface hover:text-fg')}>
+                                        {p}
+                                    </button>
+                                ))}
+                            <button onClick={() => setQuery(q => ({ ...q, page: Math.min(totalPages, q.page + 1) }))} disabled={query.page >= totalPages || loading}
+                                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-fg-muted hover:bg-surface hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                Sau <ChevronRight size={14} />
+                            </button>
+                        </nav>
                     </div>
-                ) : (
-                    <>
-                        {/* RESULTS INFO */}
-                        <div className="mb-4 text-sm text-ink-600 flex justify-between items-center">
-                            <div>
-                                Hiển thị <span className="font-semibold text-ink-900">{courses.length > 0 ? ((query.page - 1) * ITEMS_PER_PAGE) + 1 : 0}</span> đến <span className="font-semibold text-ink-900">{Math.min(query.page * ITEMS_PER_PAGE, totalCount)}</span> trong <span className="font-semibold text-ink-900">{totalCount}</span> khóa học
-                            </div>
-                            {loading && (
-                                <div className="flex items-center gap-2 text-primary-600 text-xs font-semibold animate-pulse">
-                                    <div className="w-1.5 h-1.5 bg-primary-600 rounded-full animate-bounce" />
-                                    ĐANG CẬP NHẬT...
-                                </div>
-                            )}
-                        </div>
-
-                        {/* LIST */}
-                        <div className={`transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
-                            {courses.length > 0 ? (
-                                courses.map(course => (
-                                    <CourseListItem key={course.id} course={course} onClick={() => openLessons(course.id, course.title)} onDelete={(id) => setDeletingCourse(courses.find(c => c.id === id) ?? null)} onEdit={setEditingCourse} />
-                                ))
-                            ) : (
-                                !loading && (
-                                    <div className="text-center py-12 bg-white border-2 border-dashed border-ink-300 rounded-3xl shadow-soft">
-                                        <p className="text-ink-500 text-lg">Không có khóa học nào được tìm thấy</p>
-                                    </div>
-                                )
-                            )}
-                        </div>
-
-                        {/* PAGINATION */}
-                        {totalCount > ITEMS_PER_PAGE && (
-                            <div className="flex justify-between items-center mt-8 pt-6 border-t border-ink-200">
-                                <div className="text-sm text-ink-600">
-                                    Trang <span className="font-semibold text-ink-900">{query.page}</span> / <span className="font-semibold text-ink-900">{totalPages}</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={goToPrevPage}
-                                        disabled={query.page === 1 || loading}
-                                        className="p-2 border border-ink-200 rounded-lg text-ink-600 hover:bg-ink-100 hover:text-ink-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                        title="Previous page"
-                                    >
-                                        <ChevronLeft size={18} />
-                                    </button>
-                                    <button
-                                        onClick={goToNextPage}
-                                        disabled={query.page === totalPages || loading}
-                                        className="p-2 border border-ink-200 rounded-lg text-ink-600 hover:bg-ink-100 hover:text-ink-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                        title="Next page"
-                                    >
-                                        <ChevronRight size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </>
                 )}
             </div>
 
-            <AddCourseDialog
-                open={showAddCourseModal}
-                onClose={() => setShowAddCourseModal(false)}
-                onSubmit={handleAddCourse}
-            />
-
-            <EditCourseDialog
-                open={editingCourse !== null}
-                course={editingCourse}
-                onClose={() => setEditingCourse(null)}
-                onSubmit={handleUpdateCourse}
-            />
-
-            <DeleteCourseDialog
-                course={deletingCourse}
-                onClose={() => setDeletingCourse(null)}
-                onConfirm={handleDeleteCourse}
-            />
+            <AddCourseDialog open={showAddCourseModal} onClose={() => setShowAddCourseModal(false)} onSubmit={handleAddCourse} />
+            <EditCourseDialog open={editingCourse !== null} course={editingCourse} onClose={() => setEditingCourse(null)} onSubmit={handleUpdateCourse} />
+            <DeleteCourseDialog course={deletingCourse} onClose={() => setDeletingCourse(null)} onConfirm={handleDeleteCourse} />
         </main>
     );
 };
 
 export default CourseManagement;
-

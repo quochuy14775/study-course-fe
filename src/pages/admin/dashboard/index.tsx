@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ShieldCheck, SlidersHorizontal, CalendarRange, RefreshCw, Loader2, FlaskConical, AlertCircle } from 'lucide-react';
+import { Plus, ShieldCheck, SlidersHorizontal, CalendarRange, RefreshCw, Loader2, FlaskConical, AlertCircle, GitBranch, LayoutGrid } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Button } from '../../../components/ui/Button';
 import { Tooltip } from '../../../components/ui/Tooltip';
+import { TrafficLights } from '../../../components/ui/TrafficLights';
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuCheckboxItem,
 } from '../../../components/ui/DropdownMenu';
@@ -66,6 +67,10 @@ const AdminDashboard: React.FC = () => {
     const [liveBump, setLiveBump] = useState(0);
     const { data: fetched, loading, refreshing, error, refresh } = useDashboardData(range);
 
+    // Giờ đồng bộ gần nhất — hiện trên status line
+    const [syncedAt, setSyncedAt] = useState<Date | null>(null);
+    useEffect(() => { if (fetched) setSyncedAt(new Date()); }, [fetched]);
+
     useEffect(() => {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(visible)); } catch { /* ignore */ }
     }, [visible]);
@@ -85,6 +90,7 @@ const AdminDashboard: React.FC = () => {
 
     const todo = data ? data.actionItems.length + data.openQuestions.length + data.lowReviews.length : 0;
     const today = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+    const visibleCount = SECTIONS.filter((s) => visible[s.id]).length;
 
     return (
         <main className="relative min-h-screen overflow-hidden">
@@ -108,14 +114,25 @@ const AdminDashboard: React.FC = () => {
             />
 
             <div className="relative max-w-[1700px] mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
-                {/* ── Header ── */}
-                <motion.div variants={container} initial="hidden" animate="show" className="mb-6">
-                    <motion.div variants={card} className="flex items-center gap-2 text-xs font-mono text-primary-600 dark:text-primary-300 mb-2">
-                        <span className="text-fg-subtle">~/</span>
-                        <span>admin</span>
-                        <span className="text-fg-subtle">/</span>
-                        <span>dashboard</span>
-                        <span className="inline-block w-1.5 h-3 bg-primary-600 dark:bg-primary-300 animate-blink" />
+                {/* ── Header: một cửa sổ terminal macOS — title bar, prompt zsh, "output" là greeting + toolbar, footer là status line ── */}
+                <motion.div variants={container} initial="hidden" animate="show" className="mb-6 rounded-2xl border border-line bg-surface/80 backdrop-blur-md shadow-soft-lg overflow-hidden">
+                    {/* Title bar */}
+                    <motion.div variants={card} className="relative flex items-center h-9 px-4 border-b border-line bg-surface-2/60">
+                        <TrafficLights />
+                        <p className="absolute inset-x-24 text-center font-mono text-[11px] text-fg-muted truncate pointer-events-none">admin — zsh — ~/dashboard</p>
+                        <span className="ml-auto font-mono text-[10px] text-fg-subtle tabular-nums">{RANGES.length}×{SECTIONS.length}</span>
+                    </motion.div>
+
+                    <div className="px-5 pt-4 pb-5">
+                    {/* Prompt zsh: ➜ ~/dashboard git:(main) ✗ eduhub stats --range 30d */}
+                    <motion.div variants={card} className="flex flex-wrap items-center gap-x-1.5 font-mono text-xs mb-3">
+                        <span className="text-emerald-500">➜</span>
+                        <span className="text-sky-600 dark:text-sky-300">~/dashboard</span>
+                        <span className="text-fg-subtle">git:(</span><span className="-mx-1.5 text-rose-500 dark:text-rose-300">main</span><span className="text-fg-subtle">)</span>
+                        <span className="text-amber-500">✗</span>
+                        <span className="text-fg-2">eduhub stats</span>
+                        <span className="text-primary-600 dark:text-primary-300">--range {range}</span>
+                        <span className="ml-0.5 inline-block w-[7px] h-3.5 bg-primary-600 dark:bg-primary-300 animate-blink" />
                     </motion.div>
 
                     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -128,16 +145,16 @@ const AdminDashboard: React.FC = () => {
                             >
                                 {greeting()}, {firstName}
                             </motion.h1>
-                            <p className="text-sm text-fg-muted mt-1.5 flex flex-wrap items-center gap-x-1.5">
+                            <p className="text-sm text-fg-muted mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
                                 <span className="capitalize">{today}</span>
                                 <span className="text-fg-subtle">·</span>
-                                <span className="font-semibold text-fg-2">{fmtInt(todo)} việc cần bạn</span>
-                                <span className="text-fg-subtle">·</span>
-                                <span>số liệu {RANGE_LABEL[range]} gần nhất</span>
+                                {/* Cặp key=value kiểu flag CLI */}
+                                <Flag k="todo" v={fmtInt(todo)} accent={todo > 0} />
+                                <Flag k="--range" v={range} />
                                 {data?.source === 'mock' && (
                                     <Tooltip content="Backend không phản hồi — đang hiển thị dữ liệu mẫu (chỉ ở development)" side="bottom">
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 text-[11px] font-semibold">
-                                            <FlaskConical className="w-3 h-3" /> Dữ liệu mẫu
+                                        <span className="inline-flex items-center gap-1 px-1.5 h-6 rounded-md border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300 font-mono text-[11px] font-medium">
+                                            <FlaskConical className="w-3 h-3" /> --mock
                                         </span>
                                     </Tooltip>
                                 )}
@@ -182,12 +199,33 @@ const AdminDashboard: React.FC = () => {
                             </Button>
                         </motion.div>
                     </div>
+
+                    </div>
+
+                    {/* Footer — thanh trạng thái như VS Code, tint màu brand */}
+                    <motion.div
+                        variants={card}
+                        className="flex items-center gap-4 h-8 px-4 border-t border-line bg-primary-600/10 dark:bg-primary-500/15 font-mono text-[11px] text-fg-muted whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    >
+                        <span className="flex items-center gap-1.5"><GitBranch className="w-3 h-3" /> main</span>
+                        <span className="flex items-center gap-1.5">
+                            <span className={cn('w-1.5 h-1.5 rounded-full', data?.source === 'api' ? 'bg-emerald-500 animate-pulse' : data?.source === 'mock' ? 'bg-amber-500' : 'bg-fg-subtle')} />
+                            {data?.source === 'api' ? 'api: connected' : data?.source === 'mock' ? 'api: mock' : 'api: …'}
+                        </span>
+                        <span className="flex items-center gap-1.5"><LayoutGrid className="w-3 h-3" /> sections {visibleCount}/{SECTIONS.length}</span>
+                        <span className="ml-auto flex items-center gap-1.5 tabular-nums">
+                            {refreshing ? <><Loader2 className="w-3 h-3 animate-spin" /> syncing…</> : syncedAt ? `synced ${syncedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 'synced —'}
+                        </span>
+                        <span className="hidden sm:inline">UTF-8</span>
+                        <span className="hidden sm:inline text-primary-600 dark:text-primary-300">dashboard.tsx</span>
+                    </motion.div>
                 </motion.div>
 
                 {/* ── Trạng thái tải ── */}
                 {loading && (
-                    <div className="flex items-center justify-center gap-3 py-24 text-sm text-fg-muted">
-                        <Loader2 className="w-5 h-5 animate-spin text-primary-500" /> Đang tải số liệu…
+                    <div className="flex items-center justify-center gap-3 py-24 font-mono text-sm text-fg-muted">
+                        <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
+                        <span><span className="text-code-600 dark:text-code-400">$</span> fetch dashboard --range {range}<span className="animate-blink">_</span></span>
                     </div>
                 )}
                 {!loading && error && (
@@ -263,6 +301,14 @@ const AdminDashboard: React.FC = () => {
    Pieces
    ───────────────────────────────────────────────────────────── */
 
+/** Cặp key=value mono cho dòng meta, ví dụ `todo=13`, `--range=30d`. */
+const Flag: React.FC<{ k: string; v: string; accent?: boolean }> = ({ k, v, accent }) => (
+    <span className="inline-flex items-center h-6 px-1.5 rounded-md border border-line bg-surface font-mono text-[11px] text-fg-muted">
+        {k}<span className="text-fg-subtle">=</span>
+        <span className={cn('font-semibold', accent ? 'text-primary-600 dark:text-primary-300' : 'text-fg-2')}>{v}</span>
+    </span>
+);
+
 const RANGES: Range[] = ['7d', '30d', '90d'];
 
 const RangeFilter: React.FC<{ value: Range; onChange: (r: Range) => void }> = ({ value, onChange }) => (
@@ -276,7 +322,9 @@ const RangeFilter: React.FC<{ value: Range; onChange: (r: Range) => void }> = ({
                     role="tab"
                     aria-selected={active}
                     onClick={() => onChange(r)}
-                    className={cn('relative px-3 h-8 rounded-lg text-xs font-semibold transition-colors', active ? 'text-white' : 'text-fg-muted hover:text-fg')}
+                    aria-label={RANGE_LABEL[r]}
+                    title={RANGE_LABEL[r]}
+                    className={cn('relative px-3 h-8 rounded-lg font-mono text-xs font-semibold transition-colors', active ? 'text-white' : 'text-fg-muted hover:text-fg')}
                 >
                     {active && (
                         <motion.span
@@ -285,7 +333,7 @@ const RangeFilter: React.FC<{ value: Range; onChange: (r: Range) => void }> = ({
                             transition={{ type: 'spring', stiffness: 500, damping: 36 }}
                         />
                     )}
-                    <span className="relative">{RANGE_LABEL[r]}</span>
+                    <span className="relative">{r}</span>
                 </button>
             );
         })}
