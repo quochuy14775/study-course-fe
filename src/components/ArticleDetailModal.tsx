@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Clock, Eye, ThumbsUp, User, Copy, Check } from 'lucide-react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { SyntaxHighlighter, codeTheme } from '../lib/syntaxHighlighter';
 import articleService from '../services/articleService';
 import type { Article } from '../types/article';
 
@@ -56,7 +55,7 @@ const CodeBlock: React.FC<{ code: string; lang: string }> = ({ code, lang }) => 
             {/* Code */}
             <SyntaxHighlighter
                 language={lang}
-                style={vscDarkPlus}
+                style={codeTheme}
                 showLineNumbers
                 wrapLines
                 customStyle={{

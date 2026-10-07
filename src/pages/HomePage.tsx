@@ -1,12 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence, useInView, useMotionValue, useSpring, useTransform, useAnimationControls, type MotionValue } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import NumberFlow from '@number-flow/react';
 import {
     Users, BookOpen, Star, Trophy, ArrowRight, Flame, CheckCircle2,
     GitBranch, Check, Waypoints, Braces, AlertTriangle, PanelRight,
-    Code2, Search, Wifi, BatteryFull, Terminal, Newspaper, Bookmark, User, Settings,
-    type LucideIcon,
+    Code2, Search, Wifi, BatteryFull, Terminal,
 } from 'lucide-react';
 import CourseFinder from './user/course/CourseFinder';
 import { slides, freeCourses as mockFree, premiumCourses as mockPremium } from '../mockDatas/mockCourses';
@@ -15,9 +14,11 @@ import { Course } from '../types/course';
 import { Button } from '../components/ui/Button';
 import { TrafficLights } from '../components/ui/TrafficLights';
 import { MacWindow } from '../components/ui/MacWindow';
+import { TermCommand } from '../components/ui/Terminal';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { useMyActivity } from '../hooks/useMyActivity';
+import { useMyCourses, pickContinueLearning } from '../hooks/useMyCourses';
 import { usePublicStats } from '../hooks/usePublicStats';
 import type { PublicStats } from '../services/statsService';
 import { cn } from '../lib/cn';
@@ -28,6 +29,16 @@ const HomePage: React.FC = () => {
     const [freeCourses, setFreeCourses] = useState<Course[]>([]);
     const [premiumCourses, setPremiumCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Khóa đã hoàn thành (có chứng chỉ) không hiện lại ở catalog — xem lại thì vào "Khóa học của tôi".
+    // Khóa đang học dở vẫn hiện để người dùng tìm thấy và tiếp tục.
+    const myCourses = useMyCourses();
+    const completedIds = useMemo(
+        () => new Set(myCourses.filter((e) => e.isCompleted).map((e) => e.courseId)),
+        [myCourses],
+    );
+    const visibleFree = useMemo(() => freeCourses.filter((c) => !completedIds.has(c.id)), [freeCourses, completedIds]);
+    const visiblePremium = useMemo(() => premiumCourses.filter((c) => !completedIds.has(c.id)), [premiumCourses, completedIds]);
 
     useEffect(() => {
         const fetchCourses = async () => {
@@ -73,7 +84,7 @@ const HomePage: React.FC = () => {
                 <Hero />
                 <Stats />
 
-                <CourseFinder id="courses" free={freeCourses} pro={premiumCourses} loading={loading} />
+                <CourseFinder id="courses" free={visibleFree} pro={visiblePremium} loading={loading} />
             </div>
         </main>
     );
@@ -81,8 +92,8 @@ const HomePage: React.FC = () => {
 
 /* ─────────────────────────────────────────────────────────────
    Hero — màn hình MacBook của dev: menu bar macOS, cửa sổ editor
-   nổi bên phải (tab, code, terminal zsh, status bar), thông báo
-   kiểu macOS, và Dock có hiệu ứng phóng to ở góc dưới.
+   nổi bên phải (tab, code, terminal zsh, status bar) và thông báo
+   kiểu macOS.
    ───────────────────────────────────────────────────────────── */
 
 /** Con trỏ khối nhấp nháy. */
@@ -96,10 +107,12 @@ const Hero: React.FC = () => {
     const [index, setIndex] = useState(0);
     const [paused, setPaused] = useState(false);
 
-    // Streak thật cho người đã đăng nhập; khách xem số minh họa
+    // Hai thẻ thông báo chỉ nêu con số khi đó là số thật của người đang đăng nhập;
+    // khách xem câu chung, không phải streak/tiến độ của ai cả.
     const user = useAuthStore((s) => s.user);
     const { data: activity } = useMyActivity(30, !!user);
     const streak = user && activity ? activity.currentStreak : null;
+    const current = pickContinueLearning(useMyCourses());
     const { data: publicStats } = usePublicStats();
 
     useEffect(() => {
@@ -128,15 +141,17 @@ const Hero: React.FC = () => {
             <div aria-hidden className="hidden xl:block absolute top-0 left-1/2 -translate-x-1/2 z-20 w-28 h-[18px] rounded-b-xl bg-[#0b0b0d]" />
 
             {/* Wallpaper: 3 vệt màu kiểu hình nền macOS + grid + noise */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgb(var(--color-primary-600)/0.75),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgb(var(--color-accent-600)/0.6),transparent_55%),radial-gradient(ellipse_at_bottom_left,rgb(16_185_129/0.22),transparent_45%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgb(var(--color-primary-600)/0.75),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgb(var(--color-accent-600)/0.6),transparent_55%),radial-gradient(ellipse_at_bottom_left,rgb(var(--color-primary-500)/0.35),transparent_45%)]" />
             <div className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(to_right,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_at_center,black_10%,transparent_72%)]" />
-            <div className="absolute inset-0 bg-noise opacity-[0.07] mix-blend-overlay pointer-events-none" />
+            {/* Không mix-blend: blend mode gom cả stacking context vào một buffer, đẩy thẻ thông báo
+                đang trôi ra khỏi đường compositor. Noise 7% trên nền tối nhìn gần như không khác. */}
+            <div className="absolute inset-0 bg-noise opacity-[0.07] pointer-events-none" />
             <div className="absolute -top-28 left-1/3 w-80 h-80 rounded-full bg-accent-400/25 blur-3xl pointer-events-none" />
 
             <MenuBar onSearch={() => openPalette(true)} />
 
             <div className="relative grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-10 items-stretch px-6 sm:px-10 pt-8 sm:pt-10 pb-8">
-                {/* ── Left: copy + Dock ── */}
+                {/* ── Left: copy ── */}
                 <div className="min-w-0 flex flex-col">
                     <div className="lg:my-auto">
                         <AnimatePresence mode="wait" initial={false}>
@@ -226,25 +241,6 @@ const Hero: React.FC = () => {
                             ))}
                         </div>
                     </div>
-
-                    {/* Dock — chỉ lg+, nằm trên "mặt bàn" dưới phần copy */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.45, ease: EASE }}
-                        className="hidden lg:flex mt-8"
-                    >
-                        <Dock
-                            items={[
-                                { label: 'Khóa học', icon: BookOpen,  tone: 'from-sky-400 to-blue-600',      onClick: scrollToCourses, running: true },
-                                { label: 'Lộ trình', icon: Waypoints, tone: 'from-violet-400 to-purple-600', onClick: () => navigate('/roadmap') },
-                                { label: 'Bài viết', icon: Newspaper, tone: 'from-amber-300 to-orange-500',  onClick: () => navigate('/articles') },
-                                { label: 'Đã lưu',   icon: Bookmark,  tone: 'from-rose-400 to-pink-600',     onClick: () => navigate('/saved') },
-                                { label: 'Cá nhân',  icon: User,      tone: 'from-emerald-400 to-teal-600',  onClick: () => navigate('/personal') },
-                                { label: 'Cài đặt',  icon: Settings,  tone: 'from-slate-300 to-slate-500',   onClick: () => navigate('/settings') },
-                            ]}
-                        />
-                    </motion.div>
                 </div>
 
                 {/* ── Right: cửa sổ editor nổi (lg+) ── */}
@@ -257,42 +253,53 @@ const Hero: React.FC = () => {
                         <EditorWindow index={index} onSelect={setIndex} lines={lines} file={slide.file} />
                     </motion.div>
 
-                    {/* Thông báo macOS: streak — nổi nhẹ */}
+                    {/* Thông báo macOS: streak */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1, y: [0, -6, 0] }}
-                        transition={{ opacity: { delay: 0.5, duration: 0.3 }, scale: { delay: 0.5, duration: 0.3 }, y: { duration: 6, repeat: Infinity, ease: 'easeInOut' } }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.5, duration: 0.3 }}
                         className="absolute -top-4 -right-3 z-10"
                     >
                         <MacNotification
                             icon={<Flame className="w-4 h-4" />}
                             tone="from-orange-400 to-rose-500"
                             title="EduHub"
-                            body={streak === null ? 'Streak 7 ngày 🔥 — giữ nhịp nhé!' : streak > 0 ? `Streak ${streak} ngày 🔥 — giữ nhịp nhé!` : 'Học một bài hôm nay để bắt đầu streak'}
+                            body={
+                                streak === null ? 'Học đều mỗi ngày để giữ streak 🔥'
+                                    : streak > 0 ? `Streak ${streak} ngày 🔥 — giữ nhịp nhé!`
+                                    : 'Học một bài hôm nay để bắt đầu streak'
+                            }
                         />
                     </motion.div>
 
                     {/* Thông báo macOS: tiến độ — xếp dưới thông báo streak như Notification Center */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1, y: [0, 6, 0] }}
-                        transition={{ opacity: { delay: 0.65, duration: 0.3 }, scale: { delay: 0.65, duration: 0.3 }, y: { duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 1 } }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.65, duration: 0.3 }}
                         className="absolute top-[5.5rem] -right-3 z-10"
                     >
                         <MacNotification
                             icon={<CheckCircle2 className="w-4 h-4" />}
                             tone="from-emerald-400 to-teal-600"
-                            title="Advanced React"
-                            body="12/24 bài · còn 6 giờ"
+                            title={current ? current.course.title : 'Tiến độ học'}
+                            body={
+                                current
+                                    ? `${Math.round(current.progress)}% hoàn thành · ${current.course.lessonCount} bài`
+                                    : 'Mỗi bài học xong được ghi lại tự động'
+                            }
                         >
-                            <div className="mt-2 h-1.5 rounded-full bg-white/15 overflow-hidden">
-                                <motion.div
-                                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-primary-200"
-                                    initial={{ width: 0 }}
-                                    animate={{ width: '50%' }}
-                                    transition={{ duration: 1.1, delay: 0.9, ease: EASE }}
-                                />
-                            </div>
+                            {/* Chỉ vẽ thanh tiến độ khi có tiến độ thật — không dựng số cho khách */}
+                            {current && (
+                                <div className="mt-2 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                                    <motion.div
+                                        className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-primary-200"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${Math.round(current.progress)}%` }}
+                                        transition={{ duration: 1.1, delay: 0.9, ease: EASE }}
+                                    />
+                                </div>
+                            )}
                         </MacNotification>
                     </motion.div>
                 </div>
@@ -539,75 +546,6 @@ const MacNotification: React.FC<MacNotificationProps> = ({ icon, tone, title, bo
     </div>
 );
 
-/* ── Dock macOS — ô squircle kính, phóng to theo chuột, nảy khi click ── */
-
-interface DockItemData {
-    label: string;
-    icon: LucideIcon;
-    /** Gradient dọc của ô, ví dụ "from-sky-400 to-blue-600" (sáng trên, đậm dưới như icon macOS) */
-    tone: string;
-    onClick: () => void;
-    /** Chấm "đang chạy" dưới icon */
-    running?: boolean;
-}
-
-const Dock: React.FC<{ items: DockItemData[] }> = ({ items }) => {
-    // Infinity = chuột không ở trên dock → mọi icon về kích thước gốc
-    const mouseX = useMotionValue(Infinity);
-    return (
-        <div
-            onMouseMove={(e) => mouseX.set(e.clientX)}
-            onMouseLeave={() => mouseX.set(Infinity)}
-            className="flex items-end gap-2 h-[4.25rem] px-2.5 pb-2 rounded-[20px] bg-white/[0.14] border border-white/20 backdrop-blur-2xl shadow-[0_16px_40px_-16px_rgb(0_0_0/0.7),0_1px_0_rgb(255_255_255/0.15)_inset]"
-        >
-            {items.map((it) => <DockItem key={it.label} mouseX={mouseX} {...it} />)}
-        </div>
-    );
-};
-
-const DockItem: React.FC<DockItemData & { mouseX: MotionValue<number> }> = ({ mouseX, label, icon: Icon, tone, onClick, running }) => {
-    const ref = useRef<HTMLButtonElement>(null);
-    const distance = useTransform(mouseX, (x) => {
-        const r = ref.current?.getBoundingClientRect();
-        return r ? x - r.x - r.width / 2 : Infinity;
-    });
-    const size = useSpring(useTransform(distance, [-140, 0, 140], [40, 64, 40]), { mass: 0.1, stiffness: 170, damping: 14 });
-    // Nảy lên như app macOS đang khởi động
-    const bounce = useAnimationControls();
-    const handleClick = () => {
-        bounce.start({ y: [0, -16, 0, -6, 0], transition: { duration: 0.6, ease: 'easeOut' } });
-        onClick();
-    };
-
-    return (
-        <motion.button
-            ref={ref}
-            style={{ width: size, height: size }}
-            animate={bounce}
-            onClick={handleClick}
-            aria-label={label}
-            className="group/dock relative flex items-center justify-center flex-shrink-0 text-white"
-        >
-            {/* Ô squircle: gradient dọc + highlight trên + viền tối mỏng + bóng */}
-            <span
-                aria-hidden
-                className={cn(
-                    'absolute inset-0 rounded-[22%] bg-gradient-to-b ring-1 ring-black/20',
-                    'shadow-[inset_0_1px_0_rgb(255_255_255/0.45),inset_0_-1px_0_rgb(0_0_0/0.15),0_2px_6px_rgb(0_0_0/0.35)]',
-                    tone,
-                )}
-            />
-            <span aria-hidden className="absolute inset-0 rounded-[22%] bg-gradient-to-b from-white/30 via-white/[0.06] to-transparent" />
-            <Icon className="relative w-1/2 h-1/2 drop-shadow-[0_1px_1px_rgb(0_0_0/0.35)]" strokeWidth={2.25} />
-            {/* Nhãn nổi lên trên khi hover, có mũi nhọn như tooltip của Dock */}
-            <span className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-md bg-ink-950/85 border border-white/15 backdrop-blur-md font-medium text-[11px] text-white whitespace-nowrap opacity-0 group-hover/dock:opacity-100 transition-opacity after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-ink-950/85">
-                {label}
-            </span>
-            {running && <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" aria-hidden />}
-        </motion.button>
-    );
-};
-
 /* Token màu cho snippet — tô tay, không cần highlighter. */
 type Tok = React.FC<{ children: React.ReactNode }>;
 const K: Tok = ({ children }) => <span className="text-accent-300">{children}</span>;        // keyword
@@ -742,13 +680,7 @@ const StatsGrid: React.FC<{ stats: Stat[]; updatedAt: string | null }> = ({ stat
                     </>
                 }
             >
-            {/* Dòng lệnh đầu tiên trong terminal */}
-            <div className="flex items-center gap-1.5 px-4 h-9 border-b border-line font-mono text-[11.5px] whitespace-nowrap overflow-hidden">
-                <span className="text-emerald-500">➜</span>
-                <span className="text-sky-600 dark:text-sky-300">~</span>
-                <span className="text-fg-2">eduhub stats</span>
-                <span className="text-primary-600 dark:text-primary-300">--public</span>
-            </div>
+            <TermCommand cmd="eduhub stats" flags="--public" />
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-line">
                 {STATS.map((stat) => (

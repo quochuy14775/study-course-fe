@@ -44,8 +44,12 @@ const FONT_SIZE_MAP: Record<string, string> = {
 };
 
 export function useApplySettings() {
-    const { themeMode, accentColor, fontSize, sidebarDefaultCollapsed, reducedMotion } = useSettingsStore();
-    const { sidebarCollapsed, toggleSidebarCollapsed } = useUiStore();
+    // Selector từng field: hook này chạy trong App, lấy nguyên store sẽ khiến toàn bộ
+    // cây re-render mỗi lần bất kỳ setting hay UI state nào đổi (thu sidebar, mở ⌘K…).
+    const themeMode = useSettingsStore((s) => s.themeMode);
+    const accentColor = useSettingsStore((s) => s.accentColor);
+    const fontSize = useSettingsStore((s) => s.fontSize);
+    const reducedMotion = useSettingsStore((s) => s.reducedMotion);
 
     // Apply theme (light/dark/system)
     useEffect(() => {
@@ -92,11 +96,11 @@ export function useApplySettings() {
         document.documentElement.classList.toggle('reduce-motion', reducedMotion);
     }, [reducedMotion]);
 
-    // Apply sidebar default collapsed (once on mount)
+    // Apply sidebar default collapsed (once on mount) — đọc qua getState() để App không
+    // phải subscribe uiStore chỉ vì một lần chạy lúc mount.
     useEffect(() => {
-        if (sidebarDefaultCollapsed && !sidebarCollapsed) {
-            toggleSidebarCollapsed();
+        if (useSettingsStore.getState().sidebarDefaultCollapsed && !useUiStore.getState().sidebarCollapsed) {
+            useUiStore.getState().toggleSidebarCollapsed();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 }

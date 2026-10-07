@@ -1,23 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import CommandPalette from './components/CommandPalette';
 import HomePage from './pages/HomePage';
-import RoadmapPage from './pages/RoadmapPage';
-import ArticlesPage from './pages/ArticlesPage';
-import PersonalPage from './pages/PersonalPage';
-import AuthPage from './components/AuthPage';
-import VerifyEmailPage from './pages/VerifyEmailPage';
-import SetupAccountPage from './pages/SetupAccountPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import AdminDashboard from "./pages/admin/dashboard";
-import CourseManagement from "./pages/admin/course";
-import LanguageManagement from "./pages/admin/language";
-import FrameworkManagement from "./pages/admin/framework";
-import CertificateManagement from "./pages/admin/certificate";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -29,15 +18,38 @@ import { useAuthStore } from "./stores/authStore";
 import { useUiStore } from "./stores/uiStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useApplySettings } from "./hooks/useApplySettings";
-import LessonManagement from "./pages/admin/course/lesson";
-import LearnPage from "./pages/user/course/LearnPage";
-import CourseDetailPage from "./pages/user/course/CourseDetailPage";
-import PricingPage from "./pages/PricingPage";
-import CertificatePage from "./pages/user/CertificatePage";
-import MyCoursesPage from "./pages/user/course/MyCoursesPage";
-import SavedPage from "./pages/SavedPage";
-import SettingsPage from "./pages/SettingsPage";
-import NotificationsPage from "./pages/NotificationsPage";
+
+/*
+ * Chỉ HomePage (route mặc định) nạp sẵn; phần còn lại tách chunk riêng để khách vào
+ * trang chủ không phải tải kèm dashboard admin, trình soạn bài viết hay trang học.
+ */
+const RoadmapPage = lazy(() => import('./pages/RoadmapPage'));
+const ArticlesPage = lazy(() => import('./pages/ArticlesPage'));
+const PersonalPage = lazy(() => import('./pages/PersonalPage'));
+const AuthPage = lazy(() => import('./components/AuthPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
+const SetupAccountPage = lazy(() => import('./pages/SetupAccountPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const AdminDashboard = lazy(() => import('./pages/admin/dashboard'));
+const CourseManagement = lazy(() => import('./pages/admin/course'));
+const LanguageManagement = lazy(() => import('./pages/admin/language'));
+const FrameworkManagement = lazy(() => import('./pages/admin/framework'));
+const CertificateManagement = lazy(() => import('./pages/admin/certificate'));
+const LessonManagement = lazy(() => import('./pages/admin/course/lesson'));
+const LearnPage = lazy(() => import('./pages/user/course/LearnPage'));
+const CourseDetailPage = lazy(() => import('./pages/user/course/CourseDetailPage'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
+const CertificatePage = lazy(() => import('./pages/user/CertificatePage'));
+const MyCoursesPage = lazy(() => import('./pages/user/course/MyCoursesPage'));
+const SavedPage = lazy(() => import('./pages/SavedPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+
+const PageFallback: React.FC = () => (
+    <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Đang tải trang">
+        <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+    </div>
+);
 
 function ProtectedShell() {
     const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -72,6 +84,7 @@ function ProtectedShell() {
                             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                             className="min-h-full"
                         >
+                            <Suspense fallback={<PageFallback />}>
                             <Routes location={location}>
                                 {/* Admin vào "/" thấy dashboard tổng quan; user/guest thấy trang chủ */}
                                 <Route path="/" element={isAdmin ? <AdminDashboard /> : <HomePage />} />
@@ -128,6 +141,7 @@ function ProtectedShell() {
                                     }
                                 />
                             </Routes>
+                            </Suspense>
                         </motion.div>
                     </AnimatePresence>
                 </main>
@@ -160,6 +174,7 @@ function App() {
                         hideProgressBar
                         style={{ padding: '16px 16px 0 0', width: 400 }}
                     />
+                    <Suspense fallback={<PageFallback />}>
                     <Routes>
                         <Route path="/login" element={<AuthPage />} />
                         <Route path="/signup" element={<AuthPage />} />
@@ -188,6 +203,7 @@ function App() {
                         {/* Shell công khai — không cần đăng nhập để xem */}
                         <Route path="/*" element={<ProtectedShell />} />
                     </Routes>
+                    </Suspense>
                 </Router>
             </TooltipProvider>
         </MotionConfig>

@@ -11,6 +11,7 @@ import { showToast } from '../../../components/CustomToast';
 import NotePanel from './NotePanel';
 import QuizPanel from './QuizPanel';
 import CourseTestCard from './CourseTestCard';
+import CodeExerciseDemo from '../../../components/code/CodeExerciseDemo';
 import courseService from '../../../services/courseServices';
 import lessonService from '../../../services/lessonService';
 import chapterService from '../../../services/chapterService';
@@ -18,6 +19,7 @@ import lessonInteractionService from '../../../services/lessonInteractionService
 import quizService from '../../../services/quizService';
 import progressService from '../../../services/progressService';
 import { invalidateMyActivity } from '../../../hooks/useMyActivity';
+import { invalidateMyCourses } from '../../../hooks/useMyCourses';
 import { useAuthStore } from '../../../stores/authStore';
 import { Course, formatDurationSeconds } from '../../../types/course';
 import { Lesson } from '../../../types/lesson';
@@ -571,7 +573,7 @@ const LearnPage: React.FC = () => {
         const lessonId = currentLesson.id;
         setDoneLessons((prev) => new Set(prev).add(lessonId));
         progressService.markComplete(lessonId)
-            .then(() => { invalidateMyActivity(); return refreshCourseTest(); })
+            .then(() => { invalidateMyActivity(); invalidateMyCourses(); return refreshCourseTest(); })
             .catch((e) => {
                 console.error(e);
                 showToast.error('Không thể lưu tiến độ. Vui lòng thử lại.');
@@ -924,9 +926,9 @@ const LearnPage: React.FC = () => {
                 <div className="flex-1 overflow-y-auto bg-ink-50">
                 <div className="flex min-h-full">
 
-                    {/* Left column: video + lesson info + comments */}
+                    {/* Left column: video + lesson info + comments — một bề rộng chung cho mọi khối (khung code cần rộng, nên nới cả cột) */}
                     <div className="flex-1 min-w-0">
-                        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+                        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5 space-y-5">
 
                           {takingCourseTest && courseTestQuiz ? (
                             <motion.div key="course-test" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-3">
@@ -936,7 +938,8 @@ const LearnPage: React.FC = () => {
                                 >
                                     <ArrowLeft className="w-3.5 h-3.5" /> Quay lại bài học
                                 </button>
-                                <QuizPanel quiz={courseTestQuiz} onFinish={refreshCourseTest} />
+                                {/* Đạt bài test là lúc isCompleted đổi → catalog trang chủ phải biết */}
+                                <QuizPanel quiz={courseTestQuiz} onFinish={() => { invalidateMyCourses(); refreshCourseTest(); }} />
                             </motion.div>
                           ) : currentLesson && viewingQuizFor === currentLesson.id && lessonQuiz ? (
                             <motion.div key={`quiz-${currentLesson.id}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-3">
@@ -960,6 +963,7 @@ const LearnPage: React.FC = () => {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3, ease: 'easeOut' }}
+                                className="mx-auto w-full max-w-[calc(68vh*16/9)]"
                             >
                                 {currentLesson?.videoId ? (
                                     <YouTubePlayer ref={playerRef} videoId={currentLesson.videoId} />
@@ -1025,6 +1029,9 @@ const LearnPage: React.FC = () => {
                                     </p>
                                 )}
                             </motion.div>
+
+                            {/* Bài tập code — demo mock; khi có BE sẽ chỉ hiện với lesson type = exercise */}
+                            <CodeExerciseDemo />
 
                             {/* Comments / QA */}
                             <div className="bg-white rounded-2xl border border-ink-200 shadow-soft overflow-hidden">

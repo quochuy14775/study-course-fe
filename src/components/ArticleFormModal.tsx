@@ -5,8 +5,7 @@ import {
     Bold, Italic, Heading2, Heading3, Code, FileCode, Quote, Link2,
     List, ListOrdered, Eye, Edit3, Copy,
 } from 'lucide-react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { SyntaxHighlighter, codeTheme } from '../lib/syntaxHighlighter';
 import { showToast } from './CustomToast';
 import articleService from '../services/articleService';
 import type { Article, ArticleRequest } from '../types/article';
@@ -74,7 +73,7 @@ const CodeBlock: React.FC<{ code: string; lang: string }> = ({ code, lang }) => 
                     {copied ? 'Đã sao chép' : 'Copy'}
                 </button>
             </div>
-            <SyntaxHighlighter language={lang} style={vscDarkPlus} showLineNumbers wrapLines
+            <SyntaxHighlighter language={lang} style={codeTheme} showLineNumbers wrapLines
                 customStyle={{ margin: 0, borderRadius: 0, fontSize: '13px', lineHeight: '1.6', background: '#1e1e1e', padding: '16px' }}
                 lineNumberStyle={{ color: '#4a4a4a', minWidth: '2.5em', userSelect: 'none' }}>
                 {code.trimEnd()}

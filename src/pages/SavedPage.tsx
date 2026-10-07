@@ -1,500 +1,336 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-    Bookmark, BookmarkCheck, BookOpen, Clock, PlayCircle,
-    User, Eye, ThumbsUp, Star, ArrowRight,
-    Search, Inbox,
+    Bookmark, BookmarkX, BookOpen, Clock, Eye, ThumbsUp, User, Star, ArrowRight, Search, Inbox,
+    FolderOpen, LayoutGrid, GraduationCap, Newspaper, Play, type LucideIcon,
 } from 'lucide-react';
 import { showToast } from '../components/CustomToast';
 import courseService from '../services/courseServices';
+import articleService from '../services/articleService';
 import enrollmentService from '../services/enrollmentService';
 import EnrollConfirmModal from '../components/EnrollConfirmModal';
 import CheckoutModal from '../components/CheckoutModal';
 import { useEnrollFlow } from '../hooks/useEnrollFlow';
+import { useMyCourses } from '../hooks/useMyCourses';
+import { useSaved } from '../stores/savedStore';
+import { MacWindow } from '../components/ui/MacWindow';
+import { PageTitle } from '../components/ui/PageTitle';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 import { Course, formatDurationSeconds } from '../types/course';
+import type { Article } from '../types/article';
+import { THUMBNAIL_GRADIENTS } from './user/course/CourseCard';
+import { cn } from '../lib/cn';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+type Filter = 'all' | 'courses' | 'articles';
 
-interface Article {
-    id: number;
-    title: string;
-    excerpt: string;
-    author: string;
-    date: string;
-    category: string;
-    readTime: number;
-    views: number;
-    likes: number;
-    image: string;
-}
-
-type FilterTab = 'all' | 'courses' | 'articles';
-
-// ── Mock articles (mirror ArticlesPage data) ──────────────────────────────────
-
-const ARTICLES: Article[] = [
-    { id: 1, title: 'React Hooks: Một hướng dẫn hoàn chỉnh', excerpt: 'Tìm hiểu về React Hooks và cách sử dụng chúng để viết các component hiệu quả hơn', author: 'John Doe', date: '15 Apr 2024', category: 'React', readTime: 8, views: 2500, likes: 340, image: '📘' },
-    { id: 2, title: 'TypeScript Best Practices', excerpt: 'Những thực tiễn tốt nhất để viết mã TypeScript sạch và an toàn', author: 'Jane Smith', date: '12 Apr 2024', category: 'TypeScript', readTime: 10, views: 1850, likes: 280, image: '📕' },
-    { id: 3, title: 'CSS Grid vs Flexbox: Khi nào dùng cái nào?', excerpt: 'So sánh CSS Grid và Flexbox, hiểu rõ khi nào nên sử dụng mỗi cái', author: 'Mike Johnson', date: '10 Apr 2024', category: 'CSS', readTime: 6, views: 3200, likes: 450, image: '📗' },
-    { id: 4, title: 'State Management trong React', excerpt: 'So sánh Context API, Redux, Zustand và các giải pháp state management khác', author: 'Sarah Williams', date: '8 Apr 2024', category: 'React', readTime: 12, views: 2100, likes: 320, image: '📙' },
-    { id: 5, title: 'Web Performance Optimization', excerpt: 'Những kỹ thuật để tối ưu hóa hiệu suất website của bạn', author: 'John Doe', date: '5 Apr 2024', category: 'Performance', readTime: 11, views: 1600, likes: 220, image: '📘' },
-    { id: 6, title: 'Docker cho Developers', excerpt: 'Hướng dẫn sử dụng Docker để containerize ứng dụng của bạn', author: 'Jane Smith', date: '2 Apr 2024', category: 'DevOps', readTime: 9, views: 1400, likes: 180, image: '📕' },
+const FILTERS: Array<{ id: Filter; label: string; icon: LucideIcon }> = [
+    { id: 'all',      label: 'Tất cả',   icon: LayoutGrid },
+    { id: 'courses',  label: 'Khóa học', icon: GraduationCap },
+    { id: 'articles', label: 'Bài viết', icon: Newspaper },
 ];
 
-const CATEGORY_COLOR: Record<string, string> = {
-    React:       'bg-blue-50 text-blue-700 border-blue-200',
-    TypeScript:  'bg-indigo-50 text-indigo-700 border-indigo-200',
-    CSS:         'bg-purple-50 text-purple-700 border-purple-200',
-    Performance: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    DevOps:      'bg-orange-50 text-orange-700 border-orange-200',
+const LEVEL: Record<string, { label: string; badge: 'success' | 'warning' | 'primary' }> = {
+    Beginner:     { label: 'Cơ bản',    badge: 'success' },
+    Intermediate: { label: 'Trung cấp', badge: 'warning' },
+    Advanced:     { label: 'Nâng cao',  badge: 'primary' },
 };
 
-const LEVEL_CONFIG: Record<string, { label: string; className: string }> = {
-    Beginner:     { label: 'Cơ bản',    className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-    Intermediate: { label: 'Trung cấp', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
-    Advanced:     { label: 'Nâng cao',  className: 'bg-primary-50 text-primary-700 border border-primary-200' },
-};
+const EASE = [0.16, 1, 0.3, 1] as const;
 
-const GRADIENTS = [
-    ['#4f46e5', '#7c3aed'], ['#7c3aed', '#6366f1'], ['#10b981', '#0d9488'],
-    ['#f43f5e', '#ec4899'], ['#f59e0b', '#f97316'], ['#06b6d4', '#3b82f6'],
-];
-
-// ── localStorage helpers ──────────────────────────────────────────────────────
-
-const LS_COURSES  = 'saved-course-ids';
-const LS_ARTICLES = 'saved-article-ids';
-
-const loadIds = (key: string, fallback: number[]): number[] => {
-    try {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
-    } catch { return fallback; }
-};
-
-const saveIds = (key: string, ids: number[]) => {
-    localStorage.setItem(key, JSON.stringify(ids));
-};
-
-// ── Animation variants ────────────────────────────────────────────────────────
-
-const container: Variants = {
-    hidden: { opacity: 0 },
-    show:   { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
-};
-
-const itemVariant: Variants = {
-    hidden: { opacity: 0, y: 20, scale: 0.97 },
-    show:   { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 260, damping: 24 } },
-    exit:   { opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.22 } },
-};
-
-// ── Saved Course Card ─────────────────────────────────────────────────────────
-
-const SavedCourseCard: React.FC<{
-    course: Course;
-    onUnsave: (id: number) => void;
-}> = ({ course, onUnsave }) => {
-    const navigate = useNavigate();
-    const { pendingCourse, enrolling, requestEnroll, cancelEnroll, confirmEnroll } = useEnrollFlow();
-    const [checkoutOpen, setCheckoutOpen] = useState(false);
-    const [from, to] = GRADIENTS[course.id % GRADIENTS.length];
-    const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
-
-    /** Thanh toán hiện là mock; ghi danh mới là thứ thật sự được lưu xuống DB. */
-    const handleCheckoutSuccess = async () => {
-        try {
-            await enrollmentService.enroll(course.id);
-        } catch (e) {
-            console.error(e);
-            showToast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.');
-        }
-    };
-
-    return (
-        <motion.div
-            layout
-            variants={itemVariant}
-            initial="hidden" animate="show" exit="exit"
-            whileHover={{ y: -4, boxShadow: '0 16px 40px rgb(79 70 229 / 0.12)' }}
-            className="group bg-white border border-ink-200 rounded-2xl overflow-hidden flex flex-col shadow-soft transition-shadow duration-300"
-        >
-            {/* Thumbnail */}
-            <div className="relative aspect-[16/9] flex-shrink-0 overflow-hidden">
-                {course.imageUrl ? (
-                    <img src={course.imageUrl} alt={course.title} className="absolute inset-0 w-full h-full object-cover" />
-                ) : (
-                    <>
-                        <div className="absolute inset-0" style={{ background: `linear-gradient(135deg,${from},${to})` }} />
-                        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px,white 1px,transparent 0)', backgroundSize: '20px 20px' }} />
-                        <span className="absolute inset-0 flex items-center justify-center text-5xl font-black text-white/20 select-none">
-                            {course.title.charAt(0)}
-                        </span>
-                    </>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-
-                {/* Unsave button */}
-                <button
-                    onClick={() => onUnsave(course.id)}
-                    className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-rose-500/80 transition-all duration-200"
-                    title="Bỏ lưu"
-                >
-                    <BookmarkCheck className="w-4 h-4 text-white" />
-                </button>
-            </div>
-
-            {/* Body */}
-            <div className="flex flex-col flex-1 p-4 gap-2.5">
-                <span className={`self-start text-[10px] font-semibold px-2 py-0.5 rounded-full ${levelCfg.className}`}>
-                    {levelCfg.label}
-                </span>
-                <h3 className="text-sm font-bold text-ink-900 line-clamp-2 leading-snug">{course.title}</h3>
-                <p className="text-xs text-ink-500 line-clamp-2 leading-relaxed flex-1">{course.description}</p>
-
-                <div className="flex items-center gap-3 text-[11px] text-ink-400">
-                    {course.totalDurationSeconds > 0 && (
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDurationSeconds(course.totalDurationSeconds)}</span>
-                    )}
-                    {course.lessonCount > 0 && (
-                        <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{course.lessonCount} bài</span>
-                    )}
-                    <span className="ml-auto flex items-center gap-1">
-                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                        <span className="font-semibold text-ink-700">{course.rating.toFixed(1)}</span>
-                    </span>
-                </div>
-
-                <div className="h-px bg-ink-100" />
-
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-extrabold text-ink-900">
-                        {course.price === 0 ? <span className="text-emerald-600">Miễn phí</span> : `${course.price.toLocaleString('vi-VN')}₫`}
-                    </span>
-                    <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        // Khóa miễn phí đi qua dialog xác nhận; khóa có phí phải qua checkout trước.
-                        onClick={() => course.price === 0
-                            ? requestEnroll(course)
-                            : setCheckoutOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:brightness-105 transition-all"
-                    >
-                        <PlayCircle className="w-3.5 h-3.5" />
-                        {course.price === 0 ? 'Đăng ký học' : 'Mua ngay'}
-                    </motion.button>
-
-                    <EnrollConfirmModal
-                        course={pendingCourse}
-                        loading={enrolling}
-                        onCancel={cancelEnroll}
-                        onConfirm={confirmEnroll}
-                    />
-                    <CheckoutModal
-                        isOpen={checkoutOpen}
-                        onClose={() => setCheckoutOpen(false)}
-                        title={course.title}
-                        price={course.price}
-                        onSuccess={handleCheckoutSuccess}
-                        onEnterCourse={() => navigate(`/courses/${course.id}/learn`)}
-                    />
-                </div>
-            </div>
-        </motion.div>
-    );
-};
-
-// ── Saved Article Card ────────────────────────────────────────────────────────
-
-const SavedArticleCard: React.FC<{
-    article: Article;
-    onUnsave: (id: number) => void;
-}> = ({ article, onUnsave }) => {
-    const catCls = CATEGORY_COLOR[article.category] ?? 'bg-ink-50 text-ink-700 border-ink-200';
-
-    return (
-        <motion.div
-            layout
-            variants={itemVariant}
-            initial="hidden" animate="show" exit="exit"
-            whileHover={{ y: -4, boxShadow: '0 16px 40px rgb(79 70 229 / 0.10)' }}
-            className="group bg-white border border-ink-200 rounded-2xl overflow-hidden flex flex-col shadow-soft transition-shadow duration-300"
-        >
-            {/* Cover */}
-            <div className="relative h-32 bg-gradient-to-br from-ink-50 to-primary-50/40 flex items-center justify-center flex-shrink-0">
-                <span className="text-5xl select-none">{article.image}</span>
-                <div className="absolute inset-0 bg-gradient-to-t from-white/30 via-transparent to-transparent" />
-
-                {/* Unsave button */}
-                <button
-                    onClick={() => onUnsave(article.id)}
-                    className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/70 backdrop-blur-sm border border-ink-100 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-rose-50 hover:border-rose-200 transition-all duration-200"
-                    title="Bỏ lưu"
-                >
-                    <BookmarkCheck className="w-4 h-4 text-rose-500" />
-                </button>
-
-                {/* Category */}
-                <span className={`absolute bottom-2.5 left-3 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${catCls}`}>
-                    {article.category}
-                </span>
-            </div>
-
-            {/* Body */}
-            <div className="flex flex-col flex-1 p-4 gap-2">
-                <h3 className="text-sm font-bold text-ink-900 line-clamp-2 leading-snug">{article.title}</h3>
-                <p className="text-xs text-ink-500 line-clamp-3 leading-relaxed flex-1">{article.excerpt}</p>
-
-                <div className="flex items-center gap-3 text-[11px] text-ink-400 mt-auto pt-2 border-t border-ink-50">
-                    <span className="flex items-center gap-1"><User className="w-3 h-3" />{article.author}</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{article.readTime} phút</span>
-                    <span className="ml-auto flex items-center gap-1">
-                        <Eye className="w-3 h-3" />{article.views.toLocaleString()}
-                    </span>
-                    <span className="flex items-center gap-1 text-rose-400">
-                        <ThumbsUp className="w-3 h-3" />{article.likes}
-                    </span>
-                </div>
-            </div>
-        </motion.div>
-    );
-};
-
-// ── Main Page ─────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Page
+   ───────────────────────────────────────────────────────────── */
 
 const SavedPage: React.FC = () => {
-    const [allCourses, setAllCourses] = useState<Course[]>([]);
-    const [loadingCourses, setLoadingCourses] = useState(true);
-    const [savedCourseIds, setSavedCourseIds]   = useState<number[]>(() => loadIds(LS_COURSES,  [1, 2, 3]));
-    const [savedArticleIds, setSavedArticleIds] = useState<number[]>(() => loadIds(LS_ARTICLES, [1, 3, 5]));
-    const [tab, setTab]   = useState<FilterTab>('all');
-    const [search, setSearch] = useState('');
+    const navigate = useNavigate();
+    const saved = useSaved();
+    const enrolled = useMyCourses();
+    const [filter, setFilter] = useState<Filter>('all');
+    const [query, setQuery] = useState('');
 
+    const [courses, setCourses] = useState<Course[]>([]);
+    const [articles, setArticles] = useState<Article[]>([]);
+    const [loading, setLoading] = useState(saved.courses.length + saved.articles.length > 0);
+
+    // Chỉ gọi API khi có gì để hiện; danh sách trống thì không tốn request.
     useEffect(() => {
-        courseService.getCourses({ count: true, top: 50 })
-            .then((res) => setAllCourses(res.value ?? []))
-            .finally(() => setLoadingCourses(false));
-    }, []);
+        const wantCourses = saved.courses.length > 0;
+        const wantArticles = saved.articles.length > 0;
+        if (!wantCourses && !wantArticles) { setCourses([]); setArticles([]); setLoading(false); return; }
 
-    // Persist to localStorage whenever ids change
-    useEffect(() => { saveIds(LS_COURSES,  savedCourseIds);  }, [savedCourseIds]);
-    useEffect(() => { saveIds(LS_ARTICLES, savedArticleIds); }, [savedArticleIds]);
+        let cancelled = false;
+        setLoading(true);
+        Promise.all([
+            wantCourses ? courseService.getCourses({ top: 100 }).then((r) => r.value ?? []).catch(() => []) : Promise.resolve([] as Course[]),
+            wantArticles ? articleService.getArticles().catch(() => [] as Article[]) : Promise.resolve([] as Article[]),
+        ]).then(([c, a]) => {
+            if (cancelled) return;
+            setCourses(c);
+            setArticles(a);
+            setLoading(false);
+        });
+        return () => { cancelled = true; };
+        // Chỉ refetch khi *số lượng* id đổi từ 0 ↔ >0; bỏ lưu một mục thì lọc client-side là đủ.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [saved.courses.length > 0, saved.articles.length > 0]);
 
-    const unsaveCourse  = useCallback((id: number) => setSavedCourseIds((p) => p.filter((x) => x !== id)), []);
-    const unsaveArticle = useCallback((id: number) => setSavedArticleIds((p) => p.filter((x) => x !== id)), []);
+    const q = query.trim().toLowerCase();
+    const savedCourses = useMemo(
+        () => courses.filter((c) => saved.courses.includes(c.id) && (!q || c.title.toLowerCase().includes(q))),
+        [courses, saved.courses, q],
+    );
+    const savedArticles = useMemo(
+        () => articles.filter((a) => saved.articles.includes(a.id) && (!q || a.title.toLowerCase().includes(q))),
+        [articles, saved.articles, q],
+    );
+    const showCourses = filter !== 'articles' && savedCourses.length > 0;
+    const showArticles = filter !== 'courses' && savedArticles.length > 0;
+    const visible = (filter !== 'articles' ? savedCourses.length : 0) + (filter !== 'courses' ? savedArticles.length : 0);
+    const totalSaved = saved.courses.length + saved.articles.length;
+    const current = FILTERS.find((f) => f.id === filter)!;
 
-    const savedCourses  = useMemo(() => allCourses.filter((c) => savedCourseIds.includes(c.id)), [allCourses, savedCourseIds]);
-    const savedArticles = useMemo(() => ARTICLES.filter((a) => savedArticleIds.includes(a.id)), [savedArticleIds]);
-
-    // Filtered by tab + search
-    const filteredCourses = useMemo(() => {
-        if (tab === 'articles') return [];
-        const q = search.toLowerCase();
-        return q ? savedCourses.filter((c) => c.title.toLowerCase().includes(q)) : savedCourses;
-    }, [savedCourses, tab, search]);
-
-    const filteredArticles = useMemo(() => {
-        if (tab === 'courses') return [];
-        const q = search.toLowerCase();
-        return q ? savedArticles.filter((a) => a.title.toLowerCase().includes(q)) : savedArticles;
-    }, [savedArticles, tab, search]);
-
-    const totalSaved = savedCourseIds.length + savedArticleIds.length;
-    const totalFiltered = filteredCourses.length + filteredArticles.length;
-    const isEmpty = !loadingCourses && totalFiltered === 0;
-
-    const TABS = [
-        { key: 'all'      as FilterTab, label: 'Tất cả',   count: totalSaved },
-        { key: 'courses'  as FilterTab, label: 'Khóa học', count: savedCourseIds.length },
-        { key: 'articles' as FilterTab, label: 'Bài viết', count: savedArticleIds.length },
-    ];
+    // Một luồng ghi danh + một cặp modal cho cả trang thay vì mỗi dòng một bộ.
+    const { pendingCourse, enrolling, requestEnroll, cancelEnroll, confirmEnroll } = useEnrollFlow();
+    const [checkout, setCheckout] = useState<Course | null>(null);
+    const enrollmentOf = (id: number) => enrolled.find((e) => e.courseId === id);
 
     return (
-        <main className="min-h-screen bg-ink-50 relative overflow-hidden">
+        <main className="relative min-h-screen overflow-hidden">
+            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-70 [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)]" />
 
-            {/* ── Background (PersonalPage style) ── */}
-            <motion.div
-                className="absolute inset-0 bg-gradient-mesh pointer-events-none"
-                style={{ backgroundSize: '180% 180%' }}
-                animate={{ backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'] }}
-                transition={{ duration: 18, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
-            <motion.div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-primary-400/20 blur-3xl pointer-events-none"
-                animate={{ x: [0, 60, 0], y: [0, 40, 0], scale: [1, 1.15, 1] }}
-                transition={{ duration: 16, ease: 'easeInOut', repeat: Infinity }} />
-            <motion.div className="absolute top-1/3 -right-24 w-[28rem] h-[28rem] rounded-full bg-accent-400/20 blur-3xl pointer-events-none"
-                animate={{ x: [0, -50, 0], y: [0, -30, 0], scale: [1, 1.2, 1] }}
-                transition={{ duration: 20, ease: 'easeInOut', repeat: Infinity }} />
-            <motion.div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-code-400/15 blur-3xl pointer-events-none"
-                animate={{ x: [0, 40, 0], y: [0, -40, 0], scale: [1, 1.1, 1] }}
-                transition={{ duration: 22, ease: 'easeInOut', repeat: Infinity }} />
+            <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6">
+                <PageTitle
+                    path="saved"
+                    title="Đã lưu"
+                    subtitle={totalSaved > 0 ? `${totalSaved} mục — khóa học & bài viết bạn đánh dấu` : 'Lưu khóa học và bài viết để xem lại sau'}
+                />
 
-            <motion.div
-                variants={container} initial="hidden" animate="show"
-                className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-8"
-            >
-                {/* ── Header ── */}
-                <motion.section variants={itemVariant}>
-                    <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
-                        <span className="text-ink-400">~/</span>
-                        <span>saved</span>
-                        <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
-                    </div>
-                    <div className="flex items-end justify-between gap-4 flex-wrap">
-                        <div>
-                            <motion.h1
-                                className="text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-primary-600 via-accent-500 to-primary-600 bg-clip-text text-transparent"
-                                style={{ backgroundSize: '200% auto' }}
-                                animate={{ backgroundPosition: ['0% center', '200% center'] }}
-                                transition={{ duration: 6, ease: 'linear', repeat: Infinity }}
-                            >
-                                Đã lưu
-                            </motion.h1>
-                            <p className="text-sm text-ink-500 mt-1">
-                                {totalSaved > 0
-                                    ? `${totalSaved} mục đã lưu — khóa học & bài viết`
-                                    : 'Lưu khóa học và bài viết yêu thích để xem lại sau'}
-                            </p>
-                        </div>
-                        {totalSaved > 0 && (
-                            <div className="flex items-center gap-2 text-xs text-ink-500 bg-white border border-ink-200 rounded-2xl px-4 py-2.5 shadow-soft">
-                                <Bookmark className="w-3.5 h-3.5 text-primary-500" />
-                                <span><span className="font-bold text-ink-900">{savedCourseIds.length}</span> khóa học</span>
-                                <span className="text-ink-300">·</span>
-                                <span><span className="font-bold text-ink-900">{savedArticleIds.length}</span> bài viết</span>
-                            </div>
-                        )}
-                    </div>
-                </motion.section>
-
-                {/* ── Filter + Search ── */}
-                <motion.div variants={itemVariant} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                    {/* Tabs */}
-                    <div className="flex items-center gap-1 p-1 bg-white border border-ink-200 rounded-2xl shadow-soft flex-shrink-0">
-                        {TABS.map(({ key, label, count }) => (
-                            <button
-                                key={key}
-                                onClick={() => setTab(key)}
-                                className={`relative px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                                    tab === key
-                                        ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-sm'
-                                        : 'text-ink-500 hover:text-ink-900 hover:bg-ink-50'
-                                }`}
-                            >
-                                {label}
-                                <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                                    tab === key ? 'bg-white/25 text-white' : 'bg-ink-100 text-ink-500'
-                                }`}>
-                                    {count}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Search */}
-                    <div className="relative flex-1 w-full sm:w-auto">
-                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
-                        <input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Tìm trong danh sách đã lưu..."
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-ink-200 rounded-2xl text-sm text-ink-800 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-300 shadow-soft transition-all"
-                        />
-                    </div>
-                </motion.div>
-
-                {/* ── Content ── */}
-                {isEmpty ? (
-                    <motion.div
-                        variants={itemVariant}
-                        className="bg-white border border-dashed border-ink-300 rounded-3xl py-24 flex flex-col items-center gap-4 text-center"
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}>
+                    <MacWindow
+                        title={<><FolderOpen className="w-3.5 h-3.5 text-primary-500" /> Đã lưu</>}
+                        footer={
+                            <>
+                                <span className="tabular-nums">{visible} mục</span>
+                                {totalSaved > 0 && <><span className="text-fg-subtle">·</span>{saved.courses.length} khóa học<span className="text-fg-subtle">·</span>{saved.articles.length} bài viết</>}
+                                <span className="ml-auto text-fg-subtle">~/saved/{filter}</span>
+                            </>
+                        }
                     >
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-50 to-accent-50 flex items-center justify-center">
-                            <Inbox className="w-8 h-8 text-primary-400" />
-                        </div>
-                        <div>
-                            <p className="text-base font-bold text-ink-700">
-                                {search ? 'Không tìm thấy kết quả' : 'Chưa có gì được lưu'}
-                            </p>
-                            <p className="text-sm text-ink-400 mt-1">
-                                {search ? 'Thử từ khóa khác' : 'Nhấn icon bookmark trên khóa học hoặc bài viết để lưu lại'}
-                            </p>
-                        </div>
-                        {!search && (
-                            <motion.button
-                                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                                onClick={() => window.location.href = '/'}
-                                className="mt-1 flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white text-sm font-semibold rounded-xl shadow-glow-primary"
-                            >
-                                Khám phá khóa học <ArrowRight className="w-4 h-4" />
-                            </motion.button>
-                        )}
-                    </motion.div>
-                ) : (
-                    <div className="space-y-8">
-                        {/* Courses section */}
-                        <AnimatePresence>
-                            {filteredCourses.length > 0 && (
-                                <motion.section
-                                    key="courses-section"
-                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                >
-                                    {tab === 'all' && (
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary-500 to-accent-500 flex-shrink-0" />
-                                            <h2 className="text-base font-bold text-ink-900">Khóa học đã lưu</h2>
-                                            <span className="text-xs font-mono text-ink-400">{filteredCourses.length}</span>
-                                        </div>
-                                    )}
-                                    <motion.div
-                                        layout
-                                        variants={container} initial="hidden" animate="show"
-                                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-                                    >
-                                        <AnimatePresence>
-                                            {filteredCourses.map((c) => (
-                                                <SavedCourseCard key={c.id} course={c} onUnsave={unsaveCourse} />
-                                            ))}
-                                        </AnimatePresence>
-                                    </motion.div>
-                                </motion.section>
-                            )}
-                        </AnimatePresence>
+                        <div className="flex min-h-[24rem]">
+                            <aside className="hidden md:flex w-44 flex-shrink-0 flex-col gap-0.5 p-3 border-r border-line bg-surface-2/40">
+                                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">Yêu thích</p>
+                                {FILTERS.map((f) => {
+                                    const count = f.id === 'all' ? totalSaved : f.id === 'courses' ? saved.courses.length : saved.articles.length;
+                                    return (
+                                        <button
+                                            key={f.id}
+                                            onClick={() => setFilter(f.id)}
+                                            aria-pressed={filter === f.id}
+                                            className={cn('relative flex items-center gap-2 h-8 px-2 rounded-md text-[12.5px] text-left transition-colors',
+                                                filter === f.id ? 'text-primary-700 dark:text-primary-200 font-medium' : 'text-fg-2 hover:bg-surface-2')}
+                                        >
+                                            {filter === f.id && <motion.span layoutId="saved-side-active" className="absolute inset-0 rounded-md bg-primary-500/15" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />}
+                                            <f.icon className="relative w-3.5 h-3.5" />
+                                            <span className="relative flex-1 truncate">{f.label}</span>
+                                            <span className="relative font-mono text-[10.5px] text-fg-subtle tabular-nums">{count}</span>
+                                        </button>
+                                    );
+                                })}
+                            </aside>
 
-                        {/* Articles section */}
-                        <AnimatePresence>
-                            {filteredArticles.length > 0 && (
-                                <motion.section
-                                    key="articles-section"
-                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                >
-                                    {tab === 'all' && (
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-1 h-6 rounded-full bg-gradient-to-b from-blue-400 to-cyan-500 flex-shrink-0" />
-                                            <h2 className="text-base font-bold text-ink-900">Bài viết đã lưu</h2>
-                                            <span className="text-xs font-mono text-ink-400">{filteredArticles.length}</span>
-                                        </div>
+                            <div className="min-w-0 flex-1 flex flex-col">
+                                <div className="flex items-center gap-2 px-3 sm:px-4 h-11 border-b border-line">
+                                    <span className="text-sm font-semibold text-fg truncate">{current.label}</span>
+                                    <span className="font-mono text-[11px] text-fg-subtle tabular-nums whitespace-nowrap">{visible} mục</span>
+                                    <label className="relative ml-auto">
+                                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-fg-subtle pointer-events-none" />
+                                        <input
+                                            value={query}
+                                            onChange={(e) => setQuery(e.target.value)}
+                                            placeholder="Tìm trong đã lưu…"
+                                            aria-label="Tìm trong đã lưu"
+                                            className="h-7 w-28 sm:w-40 focus:w-40 sm:focus:w-56 pl-7 pr-2 rounded-md border border-line bg-surface font-mono text-[11.5px] text-fg placeholder:text-fg-subtle outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 transition-[width,border-color,box-shadow] duration-300"
+                                        />
+                                    </label>
+                                </div>
+
+                                <div className="md:hidden flex gap-1.5 px-3 py-2 border-b border-line overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                    {FILTERS.map((f) => (
+                                        <button key={f.id} onClick={() => setFilter(f.id)}
+                                            className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-md border text-[12px] whitespace-nowrap transition-colors',
+                                                filter === f.id ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/15 dark:text-primary-300' : 'border-line text-fg-muted')}>
+                                            <f.icon className="w-3.5 h-3.5" /> {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="flex-1 p-3 sm:p-4 space-y-6">
+                                    {loading ? (
+                                        <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 rounded-lg shimmer" />)}</div>
+                                    ) : visible === 0 ? (
+                                        <EmptyState hasQuery={!!q} hasAny={totalSaved > 0} onExplore={() => navigate('/')} />
+                                    ) : (
+                                        <>
+                                            {showCourses && (
+                                                <section>
+                                                    <GroupHeader icon={GraduationCap} title="Khóa học" count={savedCourses.length} tone="bg-emerald-500" />
+                                                    <ul className="rounded-lg border border-line divide-y divide-line-2 overflow-hidden">
+                                                        {savedCourses.map((c) => (
+                                                            <CourseRow
+                                                                key={c.id}
+                                                                course={c}
+                                                                enrollment={enrollmentOf(c.id)}
+                                                                onOpen={() => navigate(`/courses/${c.id}`)}
+                                                                onLearn={() => navigate(`/courses/${c.id}/learn`)}
+                                                                onEnroll={() => (c.price === 0 ? requestEnroll(c) : setCheckout(c))}
+                                                                onUnsave={() => saved.toggleCourse(c.id)}
+                                                            />
+                                                        ))}
+                                                    </ul>
+                                                </section>
+                                            )}
+                                            {showArticles && (
+                                                <section>
+                                                    <GroupHeader icon={Newspaper} title="Bài viết" count={savedArticles.length} tone="bg-sky-500" />
+                                                    <ul className="rounded-lg border border-line divide-y divide-line-2 overflow-hidden">
+                                                        {savedArticles.map((a) => (
+                                                            <ArticleRow key={a.id} article={a} onOpen={() => navigate('/articles')} onUnsave={() => saved.toggleArticle(a.id)} />
+                                                        ))}
+                                                    </ul>
+                                                </section>
+                                            )}
+                                        </>
                                     )}
-                                    <motion.div
-                                        layout
-                                        variants={container} initial="hidden" animate="show"
-                                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-                                    >
-                                        <AnimatePresence>
-                                            {filteredArticles.map((a) => (
-                                                <SavedArticleCard key={a.id} article={a} onUnsave={unsaveArticle} />
-                                            ))}
-                                        </AnimatePresence>
-                                    </motion.div>
-                                </motion.section>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                )}
-            </motion.div>
+                                </div>
+                            </div>
+                        </div>
+                    </MacWindow>
+                </motion.div>
+            </div>
+
+            <EnrollConfirmModal course={pendingCourse} loading={enrolling} onCancel={cancelEnroll} onConfirm={confirmEnroll} />
+            <CheckoutModal
+                isOpen={checkout !== null}
+                onClose={() => setCheckout(null)}
+                title={checkout?.title ?? ''}
+                price={checkout?.price ?? 0}
+                onSuccess={async () => {
+                    if (!checkout) return;
+                    try { await enrollmentService.enroll(checkout.id); }
+                    catch (e) { console.error(e); showToast.error('Thanh toán xong nhưng chưa ghi danh được. Vui lòng vào trang chi tiết khóa học để thử lại.'); }
+                }}
+                onEnterCourse={() => checkout && navigate(`/courses/${checkout.id}/learn`)}
+            />
         </main>
     );
 };
+
+/* ─────────────────────────────────────────────────────────────
+   Pieces
+   ───────────────────────────────────────────────────────────── */
+
+const GroupHeader: React.FC<{ icon: LucideIcon; title: string; count: number; tone: string }> = ({ icon: Icon, title, count, tone }) => (
+    <header className="flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-fg-muted">
+        <span className={cn('w-1.5 h-1.5 rounded-full', tone)} />
+        <Icon className="w-3.5 h-3.5" />
+        {title}
+        <span className="text-fg-subtle normal-case tracking-normal">— {count} mục</span>
+        <span className="flex-1 h-px bg-line" />
+    </header>
+);
+
+/** Nút bỏ lưu — hiện khi rê chuột vào dòng. */
+const UnsaveButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+    <button
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        aria-label="Bỏ lưu"
+        title="Bỏ lưu"
+        className="flex w-7 h-7 items-center justify-center rounded-md text-fg-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-rose-600 hover:bg-rose-500/10 transition-all"
+    >
+        <BookmarkX className="w-3.5 h-3.5" />
+    </button>
+);
+
+const CourseRow: React.FC<{
+    course: Course;
+    enrollment?: { progress: number; isCompleted: boolean };
+    onOpen: () => void; onLearn: () => void; onEnroll: () => void; onUnsave: () => void;
+}> = ({ course, enrollment, onOpen, onLearn, onEnroll, onUnsave }) => {
+    const lvl = LEVEL[course.level] ?? LEVEL.Beginner;
+    const gradient = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
+    const isPro = course.price > 0;
+
+    return (
+        <li onClick={onOpen} className="group grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 px-3 h-16 cursor-pointer transition-colors hover:bg-primary-500/[0.05]">
+            <span className={cn('flex w-10 h-10 items-center justify-center rounded-lg bg-gradient-to-br text-white font-mono font-bold', gradient)}>
+                {course.title.charAt(0)}
+            </span>
+            <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-fg truncate group-hover:text-primary-600 dark:group-hover:text-primary-300 transition-colors">{course.title}</p>
+                <p className="flex items-center gap-2 font-mono text-[11px] text-fg-muted truncate">
+                    <Badge variant={lvl.badge} size="sm" className="normal-case tracking-normal">{lvl.label}</Badge>
+                    {course.lessonCount > 0 && <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{course.lessonCount} bài</span>}
+                    {course.totalDurationSeconds > 0 && <span className="hidden sm:flex items-center gap-1"><Clock className="w-3 h-3" />{formatDurationSeconds(course.totalDurationSeconds)}</span>}
+                    {course.rating > 0 && <span className="hidden sm:flex items-center gap-1"><Star className="w-3 h-3 text-amber-400 fill-amber-400" />{course.rating.toFixed(1)}</span>}
+                </p>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="hidden sm:inline font-mono text-[12px] font-semibold tabular-nums">
+                    {isPro ? <span className="text-fg">{course.price.toLocaleString('vi-VN')} ₫</span> : <span className="text-code-600 dark:text-emerald-400">Miễn phí</span>}
+                </span>
+                {/* Đã ghi danh thì vào học thẳng — không hiện "Đăng ký" cho khóa đã có */}
+                {enrollment ? (
+                    <Button size="xs" variant="soft" onClick={(e) => { e.stopPropagation(); onLearn(); }}>
+                        <Play className="w-3 h-3 fill-current" />
+                        {enrollment.isCompleted ? 'Xem lại' : enrollment.progress > 0 ? `Tiếp tục · ${Math.round(enrollment.progress)}%` : 'Vào học'}
+                    </Button>
+                ) : (
+                    <Button size="xs" variant={isPro ? 'primary' : 'soft'} onClick={(e) => { e.stopPropagation(); onEnroll(); }}>
+                        {isPro ? 'Mua ngay' : 'Đăng ký'} <ArrowRight className="w-3 h-3" />
+                    </Button>
+                )}
+                <UnsaveButton onClick={onUnsave} />
+            </div>
+        </li>
+    );
+};
+
+const ArticleRow: React.FC<{ article: Article; onOpen: () => void; onUnsave: () => void }> = ({ article, onOpen, onUnsave }) => (
+    <li onClick={onOpen} className="group grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 px-3 h-16 cursor-pointer transition-colors hover:bg-sky-500/[0.05]">
+        {article.thumbnailUrl
+            ? <img src={article.thumbnailUrl} alt="" loading="lazy" className="w-10 h-10 rounded-lg object-cover bg-surface-2" />
+            : <span className="flex w-10 h-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-cyan-600 text-white"><Newspaper className="w-4 h-4" /></span>}
+        <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-fg truncate group-hover:text-sky-600 dark:group-hover:text-sky-300 transition-colors">{article.title}</p>
+            <p className="flex items-center gap-2 font-mono text-[11px] text-fg-muted truncate">
+                {article.category && <span className="px-1 rounded bg-surface-2 text-[10px] text-fg-subtle">{article.category}</span>}
+                {article.author && <span className="flex items-center gap-1"><User className="w-3 h-3" />{article.author}</span>}
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{article.readTimeMinutes} phút</span>
+            </p>
+        </div>
+        <div className="flex items-center gap-3 font-mono text-[11px] text-fg-muted tabular-nums">
+            <span className="hidden sm:flex items-center gap-1"><Eye className="w-3 h-3" />{article.viewCount.toLocaleString('vi-VN')}</span>
+            <span className="hidden sm:flex items-center gap-1"><ThumbsUp className="w-3 h-3" />{article.likeCount}</span>
+            <UnsaveButton onClick={onUnsave} />
+        </div>
+    </li>
+);
+
+const EmptyState: React.FC<{ hasQuery: boolean; hasAny: boolean; onExplore: () => void }> = ({ hasQuery, hasAny, onExplore }) => (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center text-fg-subtle mb-3">
+            {hasAny ? <Inbox className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
+        </div>
+        <p className="text-sm font-medium text-fg-2">{hasQuery ? 'Không có mục nào khớp' : 'Chưa lưu gì'}</p>
+        <p className="font-mono text-[11px] text-fg-subtle mt-1">
+            {hasQuery ? <>{'// '}thử từ khóa khác</> : <>{'// '}bấm ♥ trên khóa học hoặc 🔖 trên bài viết để lưu</>}
+        </p>
+        {!hasQuery && !hasAny && (
+            <Button size="sm" className="mt-4" onClick={onExplore}>Khám phá khóa học <ArrowRight className="w-3.5 h-3.5" /></Button>
+        )}
+    </div>
+);
 
 export default SavedPage;

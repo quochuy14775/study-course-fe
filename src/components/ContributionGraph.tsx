@@ -23,6 +23,8 @@ interface ContributionGraphProps {
     badge?: React.ReactNode;
     /** Tùy biến nội dung tooltip (mặc định: mô tả hoạt động học tập) */
     describe?: (day: ContributionDay) => string;
+    /** Bỏ khung card + tiêu đề — khi đã nằm trong một cửa sổ (MacWindow) có title bar riêng */
+    frameless?: boolean;
 }
 
 /* Bậc màu: 0 → nền, 1 → nhạt … 4+ → đậm. Dark mode đảo chiều để ô "nhiều" sáng lên trên nền tối. */
@@ -55,6 +57,7 @@ export const ContributionGraph: React.FC<ContributionGraphProps> = ({
     subtitle,
     badge,
     describe = describeLearning,
+    frameless = false,
 }) => {
     const [hovered, setHovered] = useState<ContributionDay | null>(null);
     const [mouse, setMouse] = useState({ x: 0, y: 0 });
@@ -72,15 +75,19 @@ export const ContributionGraph: React.FC<ContributionGraphProps> = ({
     const monthOf = (week: Array<ContributionDay | null>) => week.find((c) => c)?.date.getMonth();
 
     return (
-        <div className="bg-surface border border-line rounded-2xl p-6 shadow-card transition-[border-color,box-shadow] duration-300 hover:border-primary-300/70 hover:shadow-card-hover dark:hover:border-primary-500/40">
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-                <div>
-                    <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
-                        {title}
-                        {badge}
-                    </h3>
-                    {subtitle && <p className="text-xs text-fg-muted mt-1">{subtitle}</p>}
-                </div>
+        <div className={frameless
+            ? 'p-4 sm:p-5'
+            : 'bg-surface border border-line rounded-2xl p-6 shadow-card transition-[border-color,box-shadow] duration-300 hover:border-primary-300/70 hover:shadow-card-hover dark:hover:border-primary-500/40'}>
+            <div className={cn('flex flex-wrap items-start gap-3 mb-5', frameless ? 'justify-end' : 'justify-between')}>
+                {!frameless && (
+                    <div>
+                        <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+                            {title}
+                            {badge}
+                        </h3>
+                        {subtitle && <p className="text-xs text-fg-muted mt-1">{subtitle}</p>}
+                    </div>
+                )}
                 <div className="flex items-center gap-2">
                     <span className="text-[10px] text-fg-subtle font-medium">Ít</span>
                     <div className="flex gap-1">

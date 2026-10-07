@@ -12,6 +12,7 @@ import enrollmentService from '../../../services/enrollmentService';
 import { useAuthGuard } from '../../../hooks/useAuthGuard';
 import { useEnrollFlow } from '../../../hooks/useEnrollFlow';
 import { useSpotlight } from '../../../hooks/useSpotlight';
+import { useSaved } from '../../../stores/savedStore';
 import { Course, formatDurationSeconds } from '../../../types/course';
 import { cn } from '../../../lib/cn';
 
@@ -42,7 +43,8 @@ const cardVariants = {
 };
 
 const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
-    const [wishlisted, setWishlisted] = useState(false);
+    const { isCourseSaved, toggleCourse } = useSaved();
+    const wishlisted = isCourseSaved(course.id);
     const [imgFailed, setImgFailed] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const navigate = useNavigate();
@@ -128,7 +130,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, variant }) => {
 
                 {/* Wishlist — hiện khi hover / focus */}
                 <button
-                    onClick={(e) => { e.stopPropagation(); setWishlisted((w) => !w); }}
+                    onClick={(e) => { e.stopPropagation(); toggleCourse(course.id); }}
                     aria-label={wishlisted ? 'Bỏ lưu' : 'Lưu khóa học'}
                     aria-pressed={wishlisted}
                     className={cn(

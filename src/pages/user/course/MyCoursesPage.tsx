@@ -1,506 +1,218 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-    BookOpen, Clock, PlayCircle, CheckCircle2,
-    TrendingUp, Flame, Star, Award,
-    Search, Filter, ArrowRight,
+    BookOpen, Clock, CheckCircle2, Flame, Award, Search, ArrowRight, Play, Terminal, FolderOpen,
+    LayoutGrid, Loader, type LucideIcon,
 } from 'lucide-react';
-import enrollmentService from '../../../services/enrollmentService';
-import { Course, formatDurationSeconds } from '../../../types/course';
+import { useMyCoursesState } from '../../../hooks/useMyCourses';
+import { MacWindow } from '../../../components/ui/MacWindow';
+import { PageTitle } from '../../../components/ui/PageTitle';
+import { TermCommand, TermBar, TermStatGrid, type TermStatItem } from '../../../components/ui/Terminal';
+import { Button } from '../../../components/ui/Button';
+import { Badge } from '../../../components/ui/Badge';
+import { formatDurationSeconds } from '../../../types/course';
 import type { EnrolledCourse } from '../../../types/enrollment';
+import { THUMBNAIL_GRADIENTS } from './CourseCard';
+import { cn } from '../../../lib/cn';
 
-// ── Animation variants (mirror PersonalPage) ─────────────────────────────────
+type Filter = 'all' | 'inprogress' | 'completed';
 
-const container: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: { staggerChildren: 0.08, delayChildren: 0.1 },
-    },
-};
-
-const cardVariant: Variants = {
-    hidden: { opacity: 0, y: 24, scale: 0.97 },
-    show: {
-        opacity: 1, y: 0, scale: 1,
-        transition: { type: 'spring', stiffness: 260, damping: 24 },
-    },
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-type FilterTab = 'all' | 'inprogress' | 'completed';
-
-const LEVEL_CONFIG: Record<string, { label: string; className: string }> = {
-    Beginner:     { label: 'Cơ bản',    className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-    Intermediate: { label: 'Trung cấp', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
-    Advanced:     { label: 'Nâng cao',  className: 'bg-primary-50 text-primary-700 border border-primary-200' },
-};
-
-const THUMBNAIL_GRADIENTS = [
-    { from: '#4f46e5', to: '#7c3aed' },
-    { from: '#7c3aed', to: '#6366f1' },
-    { from: '#10b981', to: '#0d9488' },
-    { from: '#f43f5e', to: '#ec4899' },
-    { from: '#f59e0b', to: '#f97316' },
-    { from: '#06b6d4', to: '#3b82f6' },
+const FILTERS: Array<{ id: Filter; label: string; icon: LucideIcon }> = [
+    { id: 'all',        label: 'Tất cả',     icon: LayoutGrid },
+    { id: 'inprogress', label: 'Đang học',   icon: Loader },
+    { id: 'completed',  label: 'Hoàn thành', icon: CheckCircle2 },
 ];
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+const LEVEL: Record<string, { label: string; badge: 'success' | 'warning' | 'primary' }> = {
+    Beginner:     { label: 'Cơ bản',    badge: 'success' },
+    Intermediate: { label: 'Trung cấp', badge: 'warning' },
+    Advanced:     { label: 'Nâng cao',  badge: 'primary' },
+};
 
-const SkeletonCard: React.FC = () => (
-    <div className="bg-white rounded-2xl border border-ink-200 overflow-hidden">
-        <div className="aspect-[16/9] bg-ink-100 animate-shimmer" />
-        <div className="p-4 space-y-3">
-            <div className="h-4 w-3/4 rounded bg-ink-100 animate-shimmer" />
-            <div className="h-3 w-full rounded bg-ink-100 animate-shimmer" />
-            <div className="h-2 w-full rounded-full bg-ink-100 animate-shimmer" />
-            <div className="flex justify-between items-center">
-                <div className="h-5 w-16 rounded bg-ink-100 animate-shimmer" />
-                <div className="h-8 w-24 rounded-xl bg-ink-100 animate-shimmer" />
-            </div>
-        </div>
-    </div>
-);
+const EASE = [0.16, 1, 0.3, 1] as const;
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Page
+   ───────────────────────────────────────────────────────────── */
 
-interface StatItem {
-    icon: React.ElementType;
-    label: string;
-    value: string | number;
-    color: string;
-    bg: string;
-}
-
-const StatCard: React.FC<StatItem> = ({ icon: Icon, label, value, color, bg }) => (
-    <motion.div
-        variants={cardVariant}
-        whileHover={{ y: -4, boxShadow: '0 14px 32px rgb(79 70 229 / 0.12)' }}
-        className="bg-white border border-ink-200 rounded-2xl p-5 shadow-soft relative overflow-hidden"
-    >
-        <motion.div
-            className="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-xl pointer-events-none"
-            style={{ background: bg }}
-            animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0.7, 0.4] }}
-            transition={{ duration: 4, ease: 'easeInOut', repeat: Infinity }}
-        />
-        <div className="relative flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg} bg-opacity-20`}
-                style={{ background: bg }}>
-                <Icon className={`w-5 h-5 ${color}`} />
-            </div>
-            <div>
-                <p className="text-2xl font-extrabold text-ink-900 leading-none font-mono">{value}</p>
-                <p className="text-xs text-ink-500 mt-1">{label}</p>
-            </div>
-        </div>
-    </motion.div>
-);
-
-// ── Course card (my-courses variant with progress) ────────────────────────────
-
-const MyCourseCard: React.FC<{ course: Course; progress: number; isCompleted: boolean }> = ({
-    course, progress, isCompleted,
-}) => {
+const MyCoursesPage: React.FC = () => {
     const navigate = useNavigate();
-    const g = THUMBNAIL_GRADIENTS[course.id % THUMBNAIL_GRADIENTS.length];
-    const levelCfg = LEVEL_CONFIG[course.level] ?? LEVEL_CONFIG.Beginner;
-    const duration = formatDurationSeconds(course.totalDurationSeconds);
+    const { data: enrollments, loading } = useMyCoursesState();
+    const [filter, setFilter] = useState<Filter>('all');
+    const [query, setQuery] = useState('');
+
+    const q = query.trim().toLowerCase();
+    const filtered = useMemo(() => enrollments.filter((e) =>
+        (filter === 'all' || (filter === 'completed') === e.isCompleted) &&
+        (!q || e.course.title.toLowerCase().includes(q)),
+    ), [enrollments, filter, q]);
+
+    const stats = useMemo(() => ({
+        total:      enrollments.length,
+        inprogress: enrollments.filter((e) => !e.isCompleted).length,
+        completed:  enrollments.filter((e) => e.isCompleted).length,
+        seconds:    enrollments.reduce((s, e) => s + e.course.totalDurationSeconds, 0),
+    }), [enrollments]);
+
+    const tiles: TermStatItem[] = [
+        { icon: BookOpen,     k: 'enrolled',    label: 'Đã ghi danh', value: stats.total },
+        { icon: Flame,        k: 'in_progress', label: 'Đang học',    value: stats.inprogress },
+        { icon: CheckCircle2, k: 'completed',   label: 'Hoàn thành',  value: stats.completed },
+        { icon: Clock,        k: 'total_time',  label: 'Tổng thời lượng', value: stats.seconds > 0 ? formatDurationSeconds(stats.seconds) : '0m' },
+    ];
+    const current = FILTERS.find((f) => f.id === filter)!;
+    const countOf = (id: Filter) => id === 'all' ? stats.total : id === 'completed' ? stats.completed : stats.inprogress;
 
     return (
-        <motion.div
-            variants={cardVariant}
-            whileHover={{ y: -6, transition: { type: 'spring', stiffness: 280, damping: 20 } }}
-            className="group relative bg-white rounded-2xl border border-ink-200 overflow-hidden flex flex-col shadow-soft hover:shadow-[0_20px_48px_rgb(79_70_229/0.13)] transition-shadow duration-300"
-        >
-            {/* Thumbnail */}
-            <div className="relative aspect-[16/9] overflow-hidden flex-shrink-0">
-                {course.imageUrl ? (
-                    <motion.img
-                        src={course.imageUrl}
-                        alt={course.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        animate={{ scale: [1, 1.06, 1] }}
-                        transition={{ duration: 10, ease: 'easeInOut', repeat: Infinity }}
-                    />
-                ) : (
-                    <>
-                        <div
-                            className="absolute inset-0"
-                            style={{ background: `linear-gradient(135deg, ${g.from}, ${g.to})` }}
-                        />
-                        <div
-                            className="absolute inset-0 opacity-20"
-                            style={{
-                                backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                                backgroundSize: '20px 20px',
-                            }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-6xl font-black text-white/20 select-none">
-                                {course.title.charAt(0)}
-                            </span>
+        <main className="relative min-h-screen overflow-hidden">
+            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-70 [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)]" />
+
+            <div className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6">
+                <PageTitle path="my-courses" title="Khóa học của tôi" subtitle="Tiếp tục hành trình học tập của bạn" />
+
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}>
+                    <MacWindow
+                        title={<><Terminal className="w-3.5 h-3.5 text-fg-muted" /> courses — zsh</>}
+                        footer={<><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> live<span className="ml-auto">UTF-8</span></>}
+                    >
+                        <TermCommand cmd="eduhub courses" flags="--mine --stats" />
+                        <TermStatGrid items={tiles} />
+                    </MacWindow>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08, ease: EASE }}>
+                    <MacWindow
+                        title={<><FolderOpen className="w-3.5 h-3.5 text-primary-500" /> Khóa học của tôi</>}
+                        footer={
+                            <>
+                                <span className="tabular-nums">{filtered.length} khóa học</span>
+                                <span className="text-fg-subtle">·</span>
+                                {stats.completed}/{stats.total} hoàn thành
+                                <span className="ml-auto text-fg-subtle">~/my-courses/{filter}</span>
+                            </>
+                        }
+                    >
+                        <div className="flex min-h-[24rem]">
+                            <aside className="hidden md:flex w-44 flex-shrink-0 flex-col gap-0.5 p-3 border-r border-line bg-surface-2/40">
+                                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">Trạng thái</p>
+                                {FILTERS.map((f) => (
+                                    <button
+                                        key={f.id}
+                                        onClick={() => setFilter(f.id)}
+                                        aria-pressed={filter === f.id}
+                                        className={cn('relative flex items-center gap-2 h-8 px-2 rounded-md text-[12.5px] text-left transition-colors',
+                                            filter === f.id ? 'text-primary-700 dark:text-primary-200 font-medium' : 'text-fg-2 hover:bg-surface-2')}
+                                    >
+                                        {filter === f.id && <motion.span layoutId="mycourses-side-active" className="absolute inset-0 rounded-md bg-primary-500/15" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />}
+                                        <f.icon className="relative w-3.5 h-3.5" />
+                                        <span className="relative flex-1 truncate">{f.label}</span>
+                                        <span className="relative font-mono text-[10.5px] text-fg-subtle tabular-nums">{countOf(f.id)}</span>
+                                    </button>
+                                ))}
+                            </aside>
+
+                            <div className="min-w-0 flex-1 flex flex-col">
+                                <div className="flex items-center gap-2 px-3 sm:px-4 h-11 border-b border-line">
+                                    <span className="text-sm font-semibold text-fg truncate">{current.label}</span>
+                                    <span className="font-mono text-[11px] text-fg-subtle tabular-nums whitespace-nowrap">{filtered.length} mục</span>
+                                    <label className="relative ml-auto">
+                                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-fg-subtle pointer-events-none" />
+                                        <input
+                                            value={query}
+                                            onChange={(e) => setQuery(e.target.value)}
+                                            placeholder="Tìm khóa học…"
+                                            aria-label="Tìm khóa học"
+                                            className="h-7 w-28 sm:w-40 focus:w-40 sm:focus:w-56 pl-7 pr-2 rounded-md border border-line bg-surface font-mono text-[11.5px] text-fg placeholder:text-fg-subtle outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 transition-[width,border-color,box-shadow] duration-300"
+                                        />
+                                    </label>
+                                </div>
+
+                                <div className="md:hidden flex gap-1.5 px-3 py-2 border-b border-line overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                    {FILTERS.map((f) => (
+                                        <button key={f.id} onClick={() => setFilter(f.id)}
+                                            className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-md border text-[12px] whitespace-nowrap transition-colors',
+                                                filter === f.id ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/15 dark:text-primary-300' : 'border-line text-fg-muted')}>
+                                            <f.icon className="w-3.5 h-3.5" /> {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Header cột kiểu Finder list view */}
+                                <div className="grid grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_9rem_auto] items-center gap-3 px-3 sm:px-4 h-8 border-b border-line bg-surface-2/60 font-mono text-[10px] uppercase tracking-wider text-fg-subtle">
+                                    <span />
+                                    <span>Tên</span>
+                                    <span className="hidden sm:inline">Tiến độ</span>
+                                    <span className="text-right">Hành động</span>
+                                </div>
+
+                                <div className="flex-1">
+                                    {loading ? (
+                                        <div className="p-3 space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 rounded-lg shimmer" />)}</div>
+                                    ) : filtered.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                                            <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center text-fg-subtle mb-3"><BookOpen className="w-5 h-5" /></div>
+                                            <p className="text-sm font-medium text-fg-2">
+                                                {q ? 'Không có khóa nào khớp' : filter === 'completed' ? 'Chưa hoàn thành khóa nào' : filter === 'inprogress' ? 'Không có khóa đang học' : 'Bạn chưa ghi danh khóa nào'}
+                                            </p>
+                                            <p className="font-mono text-[11px] text-fg-subtle mt-1">{q ? <>{'// '}thử từ khóa khác</> : <>{'// '}chọn một khóa ở trang chủ để bắt đầu</>}</p>
+                                            {!q && stats.total === 0 && (
+                                                <Button size="sm" className="mt-4" onClick={() => navigate('/')}>Khám phá khóa học <ArrowRight className="w-3.5 h-3.5" /></Button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <ul className="divide-y divide-line-2">
+                                            {filtered.map((e) => <CourseRow key={e.courseId} enrollment={e} onOpen={() => navigate(`/courses/${e.courseId}`)} onLearn={() => navigate(`/courses/${e.courseId}/learn`)} />)}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </>
-                )}
-
-                {/* Shimmer sweep */}
-                <motion.div
-                    className="absolute inset-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                    animate={{ x: ['-100%', '450%'] }}
-                    transition={{ duration: 2.4, ease: 'easeInOut', repeat: Infinity, repeatDelay: 4 }}
-                />
-
-                {/* Overlay for readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-
-                {/* Completed badge */}
-                {isCompleted && (
-                    <div className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 bg-emerald-500/90 backdrop-blur-sm rounded-full">
-                        <CheckCircle2 className="w-3 h-3 text-white" />
-                        <span className="text-[10px] font-bold text-white">Hoàn thành</span>
-                    </div>
-                )}
-
-                {/* Progress ring in corner */}
-                <div className="absolute bottom-3 right-3 w-9 h-9">
-                    <svg viewBox="0 0 36 36" className="rotate-[-90deg] w-full h-full">
-                        <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
-                        <motion.circle
-                            cx="18" cy="18" r="15"
-                            fill="none"
-                            stroke={isCompleted ? '#10b981' : '#818cf8'}
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeDasharray={`${2 * Math.PI * 15}`}
-                            initial={{ strokeDashoffset: 2 * Math.PI * 15 }}
-                            whileInView={{
-                                strokeDashoffset: 2 * Math.PI * 15 * (1 - progress / 100),
-                            }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
-                        />
-                    </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">
-                        {progress}%
-                    </span>
-                </div>
+                    </MacWindow>
+                </motion.div>
             </div>
-
-            {/* Content */}
-            <div className="flex flex-col flex-1 p-4 gap-2.5">
-                {/* Level badge */}
-                <span className={`self-start text-[10px] font-semibold px-2 py-0.5 rounded-full ${levelCfg.className}`}>
-                    {levelCfg.label}
-                </span>
-
-                {/* Title */}
-                <h3 className="text-sm font-bold text-ink-900 line-clamp-2 leading-snug">
-                    {course.title}
-                </h3>
-
-                {/* Meta */}
-                <div className="flex items-center gap-3 text-[11px] text-ink-400 mt-auto">
-                    {course.totalDurationSeconds > 0 && (
-                        <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />{duration}
-                        </span>
-                    )}
-                    {course.lessonCount > 0 && (
-                        <span className="flex items-center gap-1">
-                            <BookOpen className="w-3 h-3" />{course.lessonCount} bài
-                        </span>
-                    )}
-                    <span className="flex items-center gap-1 ml-auto">
-                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                        <span className="font-semibold text-ink-700">{course.rating.toFixed(1)}</span>
-                    </span>
-                </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] text-ink-400">
-                        <span>Tiến độ</span>
-                        <span className="font-semibold text-ink-600">{progress}%</span>
-                    </div>
-                    <div className="h-1.5 bg-ink-100 rounded-full overflow-hidden">
-                        <motion.div
-                            className={`h-full rounded-full ${
-                                isCompleted
-                                    ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
-                                    : 'bg-gradient-to-r from-primary-500 to-accent-500'
-                            }`}
-                            initial={{ width: 0 }}
-                            whileInView={{ width: `${progress}%` }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 1.1, ease: 'easeOut' }}
-                        />
-                    </div>
-                </div>
-
-                <div className="h-px bg-ink-100" />
-
-                {/* CTA */}
-                <motion.button
-                    onClick={() => navigate(`/courses/${course.id}/learn`)}
-                    whileTap={{ scale: 0.95 }}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:brightness-105 hover:shadow-md hover:shadow-primary-500/30 transition-all"
-                >
-                    {isCompleted ? (
-                        <><Award className="w-3.5 h-3.5" /> Xem lại</>
-                    ) : progress > 0 ? (
-                        <><PlayCircle className="w-3.5 h-3.5" /> Tiếp tục học</>
-                    ) : (
-                        <><PlayCircle className="w-3.5 h-3.5" /> Bắt đầu học</>
-                    )}
-                    <ArrowRight className="w-3 h-3" />
-                </motion.button>
-            </div>
-        </motion.div>
+        </main>
     );
 };
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Dòng khóa học — tiến độ dạng bar terminal, hành động theo trạng thái
+   ───────────────────────────────────────────────────────────── */
 
-const MyCoursesPage: React.FC = () => {
-    const [enrollments, setEnrollments] = useState<EnrolledCourse[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState<FilterTab>('all');
-    const [search, setSearch] = useState('');
-
-    useEffect(() => {
-        let mounted = true;
-        enrollmentService.getMyCourses()
-            .then((res) => { if (mounted) setEnrollments(res ?? []); })
-            .catch(() => { if (mounted) setEnrollments([]); })
-            .finally(() => { if (mounted) setLoading(false); });
-        return () => { mounted = false; };
-    }, []);
-
-    const withProgress = useMemo(
-        () => enrollments.map((e) => ({
-            course: e.course,
-            progress: Math.round(e.progress),
-            // "Hoàn thành" bám theo cờ của BE (chỉ bật khi đã pass course test), không phải
-            // progress === 100 — xem hết bài mà chưa thi thì vẫn đang học.
-            isCompleted: e.isCompleted,
-        })),
-        [enrollments],
-    );
-
-    const filtered = useMemo(() => {
-        let list = withProgress;
-        if (tab === 'inprogress') list = list.filter((x) => !x.isCompleted);
-        if (tab === 'completed')  list = list.filter((x) => x.isCompleted);
-        if (search.trim()) list = list.filter((x) => x.course.title.toLowerCase().includes(search.toLowerCase()));
-        return list;
-    }, [withProgress, tab, search]);
-
-    const stats = useMemo(() => ({
-        total:      withProgress.length,
-        inprogress: withProgress.filter((x) => !x.isCompleted).length,
-        completed:  withProgress.filter((x) => x.isCompleted).length,
-        hours:      Math.round(enrollments.reduce((s, e) => s + e.course.totalDurationSeconds, 0) / 3600),
-    }), [withProgress, enrollments]);
-
-    const TABS: { key: FilterTab; label: string; count: number }[] = [
-        { key: 'all',        label: 'Tất cả',      count: stats.total },
-        { key: 'inprogress', label: 'Đang học',     count: stats.inprogress },
-        { key: 'completed',  label: 'Hoàn thành',   count: stats.completed },
-    ];
-
-    const STATS: StatItem[] = [
-        { icon: BookOpen,    label: 'Đã đăng ký',   value: stats.total,      color: 'text-primary-600', bg: 'rgba(99,102,241,0.1)' },
-        { icon: Flame,       label: 'Đang học',      value: stats.inprogress, color: 'text-amber-600',   bg: 'rgba(245,158,11,0.1)' },
-        { icon: CheckCircle2,label: 'Hoàn thành',    value: stats.completed,  color: 'text-emerald-600', bg: 'rgba(16,185,129,0.1)' },
-        { icon: Clock,       label: 'Giờ học',       value: `${stats.hours}h`,color: 'text-accent-600',  bg: 'rgba(124,58,237,0.1)' },
-    ];
+const CourseRow: React.FC<{ enrollment: EnrolledCourse; onOpen: () => void; onLearn: () => void }> = ({ enrollment: e, onOpen, onLearn }) => {
+    const c = e.course;
+    const progress = Math.round(e.progress);
+    const lvl = LEVEL[c.level] ?? LEVEL.Beginner;
+    const gradient = THUMBNAIL_GRADIENTS[c.id % THUMBNAIL_GRADIENTS.length];
 
     return (
-        <main className="min-h-screen bg-ink-50 relative overflow-hidden">
-            {/* ── Background — mirror PersonalPage ── */}
-            <motion.div
-                className="absolute inset-0 bg-gradient-mesh pointer-events-none"
-                style={{ backgroundSize: '180% 180%' }}
-                animate={{ backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'] }}
-                transition={{ duration: 18, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <div className="absolute inset-0 bg-grid-pattern bg-grid pointer-events-none opacity-50" />
-
-            <motion.div
-                className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-primary-400/20 blur-3xl pointer-events-none"
-                animate={{ x: [0, 60, 0], y: [0, 40, 0], scale: [1, 1.15, 1] }}
-                transition={{ duration: 16, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <motion.div
-                className="absolute top-1/3 -right-24 w-[28rem] h-[28rem] rounded-full bg-accent-400/20 blur-3xl pointer-events-none"
-                animate={{ x: [0, -50, 0], y: [0, -30, 0], scale: [1, 1.2, 1] }}
-                transition={{ duration: 20, ease: 'easeInOut', repeat: Infinity }}
-            />
-            <motion.div
-                className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-code-400/15 blur-3xl pointer-events-none"
-                animate={{ x: [0, 40, 0], y: [0, -40, 0], scale: [1, 1.1, 1] }}
-                transition={{ duration: 22, ease: 'easeInOut', repeat: Infinity }}
-            />
-
-            <motion.div
-                variants={container}
-                initial="hidden"
-                animate="show"
-                className="relative max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-8"
+        <li onClick={onOpen} className="group grid grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_9rem_auto] items-center gap-3 px-3 sm:px-4 h-16 cursor-pointer transition-colors hover:bg-primary-500/[0.05]">
+            <span className={cn('relative flex w-10 h-10 items-center justify-center rounded-lg bg-gradient-to-br text-white font-mono font-bold', gradient)}>
+                {c.title.charAt(0)}
+                {e.isCompleted && <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-white ring-2 ring-surface flex items-center justify-center"><CheckCircle2 className="w-2.5 h-2.5" /></span>}
+            </span>
+            <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-fg truncate group-hover:text-primary-600 dark:group-hover:text-primary-300 transition-colors">{c.title}</p>
+                <p className="flex items-center gap-2 font-mono text-[11px] text-fg-muted truncate">
+                    <Badge variant={lvl.badge} size="sm" className="normal-case tracking-normal">{lvl.label}</Badge>
+                    {c.lessonCount > 0 && <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.lessonCount} bài</span>}
+                    {c.totalDurationSeconds > 0 && <span className="hidden sm:flex items-center gap-1"><Clock className="w-3 h-3" />{formatDurationSeconds(c.totalDurationSeconds)}</span>}
+                    {/* Tiến độ trên màn hẹp (cột riêng bị ẩn) */}
+                    <span className="sm:hidden tabular-nums">{progress}%</span>
+                </p>
+            </div>
+            <span className="hidden sm:flex items-center gap-2 whitespace-nowrap">
+                <TermBar percent={progress} width={10} tone={e.isCompleted ? 'emerald' : 'primary'} />
+                <span className="w-9 text-right font-mono text-[11px] text-fg tabular-nums">{progress}%</span>
+            </span>
+            <Button
+                size="xs"
+                variant={e.isCompleted ? 'secondary' : progress > 0 ? 'primary' : 'soft'}
+                onClick={(ev) => { ev.stopPropagation(); onLearn(); }}
             >
-                {/* ── Page header ── */}
-                <motion.section variants={cardVariant}>
-                    <div className="flex items-center gap-2 text-xs font-mono text-primary-600 mb-2">
-                        <span className="text-ink-400">~/</span>
-                        <span>my-courses</span>
-                        <span className="inline-block w-1.5 h-3 bg-primary-600 animate-blink" />
-                    </div>
-                    <motion.h1
-                        className="text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-primary-600 via-accent-500 to-primary-600 bg-clip-text text-transparent"
-                        style={{ backgroundSize: '200% auto' }}
-                        animate={{ backgroundPosition: ['0% center', '200% center'] }}
-                        transition={{ duration: 6, ease: 'linear', repeat: Infinity }}
-                    >
-                        Khóa học của tôi
-                    </motion.h1>
-                    <p className="text-sm text-ink-500 mt-1">Tiếp tục hành trình học tập của bạn</p>
-                </motion.section>
-
-                {/* ── Stats ── */}
-                <motion.div
-                    className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-                    variants={container}
-                >
-                    {STATS.map((s) => <StatCard key={s.label} {...s} />)}
-                </motion.div>
-
-                {/* ── Filter + Search bar ── */}
-                <motion.div variants={cardVariant} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                    {/* Tabs */}
-                    <div className="flex items-center gap-1 p-1 bg-white border border-ink-200 rounded-2xl shadow-soft flex-shrink-0">
-                        {TABS.map(({ key, label, count }) => (
-                            <button
-                                key={key}
-                                onClick={() => setTab(key)}
-                                className={`relative px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                                    tab === key
-                                        ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-sm'
-                                        : 'text-ink-500 hover:text-ink-900 hover:bg-ink-50'
-                                }`}
-                            >
-                                {label}
-                                {count > 0 && (
-                                    <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                                        tab === key ? 'bg-white/25 text-white' : 'bg-ink-100 text-ink-500'
-                                    }`}>
-                                        {count}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Search */}
-                    <div className="relative flex-1 w-full sm:w-auto">
-                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
-                        <input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Tìm khóa học..."
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-ink-200 rounded-2xl text-sm text-ink-800 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-300 shadow-soft transition-all"
-                        />
-                    </div>
-
-                    {/* Result count */}
-                    <span className="text-xs text-ink-400 font-mono flex-shrink-0 flex items-center gap-1">
-                        <Filter size={11} />
-                        {filtered.length} khóa học
-                    </span>
-                </motion.div>
-
-                {/* ── Course grid ── */}
-                {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <motion.div
-                        variants={cardVariant}
-                        className="bg-white border border-dashed border-ink-300 rounded-2xl py-20 flex flex-col items-center gap-4 text-center"
-                    >
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-50 to-accent-50 flex items-center justify-center">
-                            <BookOpen className="w-8 h-8 text-primary-400" />
-                        </div>
-                        <div>
-                            <p className="text-base font-bold text-ink-700">
-                                {tab === 'completed' ? 'Chưa hoàn thành khóa học nào' :
-                                 tab === 'inprogress' ? 'Chưa có khóa học đang học' :
-                                 'Bạn chưa đăng ký khóa học nào'}
-                            </p>
-                            <p className="text-sm text-ink-400 mt-1">Khám phá kho khóa học và bắt đầu ngay hôm nay</p>
-                        </div>
-                        <motion.button
-                            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                            className="mt-1 flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 text-white text-sm font-semibold rounded-xl shadow-glow-primary"
-                            onClick={() => window.location.href = '/'}
-                        >
-                            Khám phá khóa học <ArrowRight className="w-4 h-4" />
-                        </motion.button>
-                    </motion.div>
-                ) : (
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={tab + search}
-                            variants={container}
-                            initial="hidden"
-                            animate="show"
-                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-                        >
-                            {filtered.map(({ course, progress, isCompleted }) => (
-                                <MyCourseCard
-                                    key={course.id}
-                                    course={course}
-                                    progress={progress}
-                                    isCompleted={isCompleted}
-                                />
-                            ))}
-                        </motion.div>
-                    </AnimatePresence>
-                )}
-
-                {/* ── Explore more CTA ── */}
-                {!loading && filtered.length > 0 && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.5 }}
-                        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-accent-700 p-7 text-white text-center shadow-soft-lg"
-                    >
-                        <div className="absolute -top-16 -right-16 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
-                        <div className="absolute -bottom-20 -left-10 w-72 h-72 bg-accent-400/20 rounded-full blur-3xl" />
-                        <div className="relative z-10">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-xs font-medium mb-3">
-                                <TrendingUp className="w-3 h-3" />
-                                Khám phá thêm
-                            </div>
-                            <p className="text-xl font-extrabold mb-1">Mở rộng kỹ năng của bạn</p>
-                            <p className="text-white/70 text-sm mb-4">Hàng trăm khóa học mới đang chờ bạn</p>
-                            <motion.button
-                                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                                onClick={() => window.location.href = '/'}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-primary-700 font-semibold rounded-xl shadow-soft-lg text-sm"
-                            >
-                                Khám phá ngay <ArrowRight className="w-4 h-4" />
-                            </motion.button>
-                        </div>
-                    </motion.div>
-                )}
-            </motion.div>
-        </main>
+                {e.isCompleted ? <><Award className="w-3 h-3" /> Xem lại</> : <><Play className="w-3 h-3 fill-current" /> {progress > 0 ? 'Tiếp tục' : 'Bắt đầu'}</>}
+            </Button>
+        </li>
     );
 };
 
